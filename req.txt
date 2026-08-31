@@ -1,0 +1,53 @@
+CAPSTONE PROJECT 
+
+AI-Driven Medical Insights Engine 
+
+Track 1 —Taxonomy Mapping & Persona Reasoning  |  Group 1  |  5 Working Days 
+
+ 
+
+1. Business Challenge 
+
+This capstone explores whether an LLM can read short, unstructured medical insight notes and turn them into something structured and useful — by tagging each note against a fixed set of categories, and by re-explaining the same note differently depending on who's reading it (a clinician, a medical scientist, or a commercial/sales person). 
+
+Your group owns this track completely, start to finish. This is not a hand-off from anyone else and you are not waiting on another group — you will build your own environment, your own data pipeline, and your own results, independently. 
+
+2. What You Will Be Given 
+
+A sample dataset of unstructured medical insight records (short text notes, plus a few metadata fields like date and region). 
+
+A taxonomy reference list — a simple flat list of category names and short definitions that each insight should be tagged against. (No knowledge graph or graph database is involved — it's just a reference list you can look up, like a glossary.) 
+
+3. Tools — Your Choice 
+
+You are free to use any tools you're comfortable with. There is no required stack — pick whatever gets you moving fastest as a fresher team: 
+
+Any LLM — Claude, GPT, Gemini, or an open-source model. Use whatever you have access to. 
+
+Any vector database — Chroma and FAISS are the easiest to start with locally; Qdrant, Pinecone, or Weaviate work too. 
+
+Any RDBMS — SQLite is the simplest (no server to install); PostgreSQL or MySQL are fine if your group prefers them. 
+
+A simple Python UI (Streamlit, Gradio, or even just a command-line script) for the review step — it does not need to look polished. 
+
+4. Objective 
+
+By the end of this track, your group should be able to show: an LLM tagging unstructured insights against a taxonomy, a measured precision score against your own ground truth, a searchable vector store of the sample data, a working human review/correction step, and three persona-specific summaries of the same content. 
+
+5. Key Focus Area 
+
+By the end of this track, your group should be able to demonstrate, end to end: taxonomy tagging with a measured accuracy figure, a searchable vector store, a working review/correction step, and three persona-specific outputs for the same sample records. 
+
+7. Expected Deliverables 
+
+A working UI 
+
+AI-generated taxonomy tags for the full sample dataset. 
+
+A calculated accuracy/precision figure with notes on where and why it's wrong. 
+
+A searchable version of the sample data. 
+
+A working human review/correction step with evidence of use. 
+
+The same records presented three different ways — one per persona — with the differences visible. 
