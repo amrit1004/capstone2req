@@ -1,12 +1,14 @@
 """
-Vector Store for semantic search using ChromaDB
+Vector Store for semantic search using ChromaDB + TF-IDF (scikit-learn)
+Lightweight - no PyTorch needed!
 """
 import os
+import pickle
 from pathlib import Path
-import chromadb
-from chromadb.config import Settings
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 import config
-import llm_service
 import database
 
 
@@ -15,96 +17,114 @@ class VectorStore:
         # Ensure directory exists
         Path(config.CHROMA_PERSIST_DIR).mkdir(parents=True, exist_ok=True)
 
-        # Initialize ChromaDB client with persistence
-        self.client = chromadb.PersistentClient(
-            path=config.CHROMA_PERSIST_DIR,
-            settings=Settings(anonymized_telemetry=False)
-        )
+        self.vectorizer_path = os.path.join(config.CHROMA_PERSIST_DIR, "tfidf_vectorizer.pkl")
+        self.vectors_path = os.path.join(config.CHROMA_PERSIST_DIR, "tfidf_vectors.pkl")
+        self.ids_path = os.path.join(config.CHROMA_PERSIST_DIR, "insight_ids.pkl")
+        self.docs_path = os.path.join(config.CHROMA_PERSIST_DIR, "documents.pkl")
 
-        # Get or create collection
-        self.collection = self.client.get_or_create_collection(
-            name=config.CHROMA_COLLECTION_NAME,
-            metadata={"description": "Medical insights embeddings"}
-        )
+        self.vectorizer = None
+        self.vectors = None
+        self.insight_ids = []
+        self.documents = []
 
-    def add_insight(self, insight_id: str, text: str, metadata: dict = None):
-        """Add a single insight to the collection."""
-        embedding = llm_service.get_embedding(text)
+        # Try to load existing index
+        self._load_index()
 
-        self.collection.add(
-            ids=[insight_id],
-            embeddings=[embedding],
-            documents=[text],
-            metadatas=[metadata or {}]
-        )
+    def _load_index(self):
+        """Load existing index from disk."""
+        try:
+            if all(os.path.exists(p) for p in [self.vectorizer_path, self.vectors_path, self.ids_path, self.docs_path]):
+                with open(self.vectorizer_path, 'rb') as f:
+                    self.vectorizer = pickle.load(f)
+                with open(self.vectors_path, 'rb') as f:
+                    self.vectors = pickle.load(f)
+                with open(self.ids_path, 'rb') as f:
+                    self.insight_ids = pickle.load(f)
+                with open(self.docs_path, 'rb') as f:
+                    self.documents = pickle.load(f)
+                print(f"Loaded existing index with {len(self.insight_ids)} documents")
+        except Exception as e:
+            print(f"No existing index found or error loading: {e}")
+
+    def _save_index(self):
+        """Save index to disk."""
+        with open(self.vectorizer_path, 'wb') as f:
+            pickle.dump(self.vectorizer, f)
+        with open(self.vectors_path, 'wb') as f:
+            pickle.dump(self.vectors, f)
+        with open(self.ids_path, 'wb') as f:
+            pickle.dump(self.insight_ids, f)
+        with open(self.docs_path, 'wb') as f:
+            pickle.dump(self.documents, f)
 
     def add_insights_batch(self, insights: list):
         """
-        Add multiple insights to the collection.
-        insights: list of dicts with 'insight_id', 'text', and optional 'metadata' keys
+        Add multiple insights and build TF-IDF index.
+        insights: list of dicts with 'insight_id' and 'text' keys
         """
         if not insights:
             return
 
-        ids = [i['insight_id'] for i in insights]
-        texts = [i['text'] for i in insights]
-        metadatas = [i.get('metadata', {}) for i in insights]
+        self.insight_ids = [i['insight_id'] for i in insights]
+        self.documents = [i['text'] for i in insights]
 
-        # Get embeddings in batch
-        embeddings = llm_service.get_embeddings_batch(texts)
-
-        self.collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=texts,
-            metadatas=metadatas
+        # Build TF-IDF vectorizer
+        self.vectorizer = TfidfVectorizer(
+            max_features=5000,
+            stop_words='english',
+            ngram_range=(1, 2)  # Unigrams and bigrams
         )
+
+        # Fit and transform documents
+        self.vectors = self.vectorizer.fit_transform(self.documents)
+
+        # Save to disk
+        self._save_index()
 
     def search(self, query: str, top_k: int = 5) -> list:
         """
-        Search for similar insights.
+        Search for similar insights using TF-IDF cosine similarity.
         Returns list of dicts with insight_id, score, and document.
         """
-        if self.collection.count() == 0:
+        if self.vectorizer is None or self.vectors is None or len(self.insight_ids) == 0:
             return []
 
-        # Get query embedding
-        query_embedding = llm_service.get_embedding(query)
+        # Transform query
+        query_vector = self.vectorizer.transform([query])
 
-        # Search
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(top_k, self.collection.count())
-        )
+        # Calculate cosine similarity
+        similarities = cosine_similarity(query_vector, self.vectors).flatten()
+
+        # Get top-k indices
+        top_indices = similarities.argsort()[-top_k:][::-1]
 
         # Format results
-        search_results = []
-        if results and results['ids'] and results['ids'][0]:
-            for i, insight_id in enumerate(results['ids'][0]):
-                distance = results['distances'][0][i] if results['distances'] else 0
-                # Convert distance to similarity score (ChromaDB uses L2 distance by default)
-                # Lower distance = higher similarity
-                score = 1 / (1 + distance)
-
-                search_results.append({
-                    'insight_id': insight_id,
-                    'score': float(score),
-                    'document': results['documents'][0][i] if results['documents'] else None
+        results = []
+        for idx in top_indices:
+            if similarities[idx] > 0:  # Only include if there's some similarity
+                results.append({
+                    'insight_id': self.insight_ids[idx],
+                    'score': float(similarities[idx]),
+                    'document': self.documents[idx]
                 })
 
-        return search_results
+        return results
 
     def get_index_size(self):
-        """Get number of vectors in collection."""
-        return self.collection.count()
+        """Get number of documents in index."""
+        return len(self.insight_ids)
 
     def clear_collection(self):
-        """Clear all data from collection."""
-        self.client.delete_collection(config.CHROMA_COLLECTION_NAME)
-        self.collection = self.client.create_collection(
-            name=config.CHROMA_COLLECTION_NAME,
-            metadata={"description": "Medical insights embeddings"}
-        )
+        """Clear all data."""
+        self.vectorizer = None
+        self.vectors = None
+        self.insight_ids = []
+        self.documents = []
+
+        # Delete files
+        for path in [self.vectorizer_path, self.vectors_path, self.ids_path, self.docs_path]:
+            if os.path.exists(path):
+                os.remove(path)
 
 
 def build_vector_store():
@@ -124,26 +144,17 @@ def build_vector_store():
     # Prepare batch data
     insights_batch = []
     for _, row in insights_df.iterrows():
-        # Combine relevant fields for embedding
-        text = f"{row['therapeutic_area']} - {row['disease_state']}: {row['description']}"
+        # Combine relevant fields for search
+        text = f"{row['therapeutic_area']} {row['disease_state']} {row['description']}"
         insights_batch.append({
             'insight_id': row['insight_id'],
-            'text': text,
-            'metadata': {
-                'therapeutic_area': row['therapeutic_area'],
-                'disease_state': row['disease_state'],
-                'country_code': row['country_code']
-            }
+            'text': text
         })
 
     print(f"Building vector store with {len(insights_batch)} insights...")
 
-    # Add in batches to avoid rate limits
-    batch_size = 10
-    for i in range(0, len(insights_batch), batch_size):
-        batch = insights_batch[i:i+batch_size]
-        store.add_insights_batch(batch)
-        print(f"Processed {min(i+batch_size, len(insights_batch))}/{len(insights_batch)}")
+    # Build index
+    store.add_insights_batch(insights_batch)
 
     print(f"Vector store built! Total documents: {store.get_index_size()}")
     return store
@@ -155,5 +166,4 @@ def get_vector_store():
 
 
 if __name__ == "__main__":
-    # Build vector store
     build_vector_store()
