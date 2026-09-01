@@ -1,0 +1,21 @@
+CSF_ID,Therapeutic_Area,CSF_Name,Parent_SI_ID,Parent_SI_Name
+ONC-CSF-01,Oncology,KOLs understand mechanism-of-action differentiation,SI-01,Establish Scientific Leadership & Evidence Generation
+ONC-CSF-02,Oncology,Investigator community engaged across trial programme,SI-01,Establish Scientific Leadership & Evidence Generation
+ONC-CSF-03,Oncology,Biomarker testing barriers identified and addressed,SI-02,Accelerate Access & Address Unmet Patient Need
+ONC-CSF-04,Oncology,Treatment guidelines incorporate pivotal trial data,SI-02,Accelerate Access & Address Unmet Patient Need
+ONC-CSF-05,Oncology,MSLs deliver consistent scientific exchange on efficacy data,SI-03,Strengthen HCP & KOL Engagement Ecosystem
+ONC-CSF-06,Oncology,Advisory boards inform lifecycle evidence generation,SI-03,Strengthen HCP & KOL Engagement Ecosystem
+ONC-CSF-07,Oncology,Competitive tolerability profile is clearly differentiated,SI-04,Drive Differentiated Value Proposition vs. Competition
+ONC-CSF-08,Oncology,Real-world evidence supports label expansion,SI-04,Drive Differentiated Value Proposition vs. Competition
+ONC-CSF-09,Oncology,Payer understanding of clinical value proposition,SI-05,Enable Sustainable Patient Access & Affordability
+ONC-CSF-10,Oncology,Patient support programs reduce access barriers,SI-05,Enable Sustainable Patient Access & Affordability
+OL-CSF-01,O&L,KOLs understand differentiated mechanism of weight/metabolic regulation,SI-01,Establish Scientific Leadership & Evidence Generation
+OL-CSF-02,O&L,Investigator community engaged across obesity/liver trial programme,SI-01,Establish Scientific Leadership & Evidence Generation
+OL-CSF-03,O&L,Comorbidity burden (MASH/NAFLD progression) evidence gaps addressed,SI-02,Accelerate Access & Address Unmet Patient Need
+OL-CSF-04,O&L,Long-term weight-maintenance data available to guideline bodies,SI-02,Accelerate Access & Address Unmet Patient Need
+OL-CSF-05,O&L,MSLs deliver consistent scientific exchange on tolerability data,SI-03,Strengthen HCP & KOL Engagement Ecosystem
+OL-CSF-06,O&L,Advisory boards inform combination-therapy evidence strategy,SI-03,Strengthen HCP & KOL Engagement Ecosystem
+OL-CSF-07,O&L,Differentiated GI tolerability vs. competitor GLP-1/GIP agents,SI-04,Drive Differentiated Value Proposition vs. Competition
+OL-CSF-08,O&L,Cardiovascular outcome data supports broad metabolic positioning,SI-04,Drive Differentiated Value Proposition vs. Competition
+OL-CSF-09,O&L,Payer frameworks recognize obesity as chronic disease,SI-05,Enable Sustainable Patient Access & Affordability
+OL-CSF-10,O&L,Patient adherence programs address long-term therapy compliance,SI-05,Enable Sustainable Patient Access & Affordability

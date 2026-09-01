@@ -1,0 +1,13 @@
+Field_Name,Description,Data_Type,Example
+Insight_ID,Unique identifier for each insight record,String,CDO-100001
+Persona,Role type of the person providing insight,String,"Clinical, Medical"
+CreatedDate,Timestamp when the insight was recorded,DateTime,2024-03-30 18:27:02
+TherapeuticArea,Broad medical category,String,"Oncology, O&L"
+DiseaseState,Specific disease or condition discussed,String,"Pancreatic cancer, NAFLD, Multiple myeloma"
+Region_RO,Regional organization code,String,"MEA, NAR, EUCAN"
+CountryCode,ISO country code,String,"AE, CA, NL, FR, US"
+Description,Unstructured text of the medical insight,Text,Free-form insight notes
+SI_ID,Strategic Imperative identifier,String,SI-01
+SI_Name,Strategic Imperative name,String,Establish Scientific Leadership & Evidence Generation
+CSF_ID,Critical Success Factor identifier,String,ONC-CSF-01
+CSF_Name,Critical Success Factor name,String,KOLs understand mechanism-of-action differentiation
