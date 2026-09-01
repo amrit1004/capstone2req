@@ -24,8 +24,16 @@ import vector_store
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    database.init_database()
-    database.load_csv_data()
+    try:
+        print("Initializing database...")
+        database.init_database()
+        print("Loading CSV data...")
+        database.load_csv_data()
+        print("Database ready!")
+    except Exception as e:
+        print(f"ERROR during startup: {e}")
+        import traceback
+        traceback.print_exc()
     yield
     # Shutdown
     pass
@@ -203,7 +211,9 @@ async def build_search_index():
         store = vector_store.build_vector_store()
         return {"success": True, "index_size": store.get_index_size()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error building index: {str(e)}")
 
 
 @app.post("/api/search")

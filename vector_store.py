@@ -1,5 +1,5 @@
 """
-Vector Store for semantic search using ChromaDB + TF-IDF (scikit-learn)
+Vector Store for semantic search using TF-IDF (scikit-learn)
 Lightweight - no PyTorch needed!
 """
 import os
@@ -45,17 +45,26 @@ class VectorStore:
                 print(f"Loaded existing index with {len(self.insight_ids)} documents")
         except Exception as e:
             print(f"No existing index found or error loading: {e}")
+            self.vectorizer = None
+            self.vectors = None
+            self.insight_ids = []
+            self.documents = []
 
     def _save_index(self):
         """Save index to disk."""
-        with open(self.vectorizer_path, 'wb') as f:
-            pickle.dump(self.vectorizer, f)
-        with open(self.vectors_path, 'wb') as f:
-            pickle.dump(self.vectors, f)
-        with open(self.ids_path, 'wb') as f:
-            pickle.dump(self.insight_ids, f)
-        with open(self.docs_path, 'wb') as f:
-            pickle.dump(self.documents, f)
+        try:
+            with open(self.vectorizer_path, 'wb') as f:
+                pickle.dump(self.vectorizer, f)
+            with open(self.vectors_path, 'wb') as f:
+                pickle.dump(self.vectors, f)
+            with open(self.ids_path, 'wb') as f:
+                pickle.dump(self.insight_ids, f)
+            with open(self.docs_path, 'wb') as f:
+                pickle.dump(self.documents, f)
+            print("Index saved to disk")
+        except Exception as e:
+            print(f"Error saving index: {e}")
+            raise
 
     def add_insights_batch(self, insights: list):
         """
@@ -63,20 +72,25 @@ class VectorStore:
         insights: list of dicts with 'insight_id' and 'text' keys
         """
         if not insights:
-            return
+            raise ValueError("No insights provided")
 
-        self.insight_ids = [i['insight_id'] for i in insights]
-        self.documents = [i['text'] for i in insights]
+        self.insight_ids = [str(i['insight_id']) for i in insights]
+        self.documents = [str(i['text']) for i in insights]
+
+        print(f"Building TF-IDF index for {len(self.documents)} documents...")
 
         # Build TF-IDF vectorizer
         self.vectorizer = TfidfVectorizer(
             max_features=5000,
             stop_words='english',
-            ngram_range=(1, 2)  # Unigrams and bigrams
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.95
         )
 
         # Fit and transform documents
         self.vectors = self.vectorizer.fit_transform(self.documents)
+        print(f"TF-IDF matrix shape: {self.vectors.shape}")
 
         # Save to disk
         self._save_index()
@@ -96,16 +110,17 @@ class VectorStore:
         similarities = cosine_similarity(query_vector, self.vectors).flatten()
 
         # Get top-k indices
+        top_k = min(top_k, len(self.insight_ids))
         top_indices = similarities.argsort()[-top_k:][::-1]
 
         # Format results
         results = []
         for idx in top_indices:
-            if similarities[idx] > 0:  # Only include if there's some similarity
+            if similarities[idx] > 0:
                 results.append({
                     'insight_id': self.insight_ids[idx],
                     'score': float(similarities[idx]),
-                    'document': self.documents[idx]
+                    'document': self.documents[idx][:500]  # Truncate for response
                 })
 
         return results
@@ -123,35 +138,56 @@ class VectorStore:
 
         # Delete files
         for path in [self.vectorizer_path, self.vectors_path, self.ids_path, self.docs_path]:
-            if os.path.exists(path):
-                os.remove(path)
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"Error deleting {path}: {e}")
 
 
 def build_vector_store():
     """Build vector store from all insights in database."""
+    print("Starting vector store build...")
+
     store = VectorStore()
 
     # Clear existing data
+    print("Clearing existing index...")
     store.clear_collection()
 
     # Get all insights
+    print("Loading insights from database...")
     insights_df = database.get_all_insights()
 
     if insights_df.empty:
-        print("No insights found in database")
-        return store
+        raise ValueError("No insights found in database")
+
+    print(f"Found {len(insights_df)} insights")
 
     # Prepare batch data
     insights_batch = []
     for _, row in insights_df.iterrows():
         # Combine relevant fields for search
-        text = f"{row['therapeutic_area']} {row['disease_state']} {row['description']}"
-        insights_batch.append({
-            'insight_id': row['insight_id'],
-            'text': text
-        })
+        text_parts = []
+        if row.get('therapeutic_area'):
+            text_parts.append(str(row['therapeutic_area']))
+        if row.get('disease_state'):
+            text_parts.append(str(row['disease_state']))
+        if row.get('description'):
+            text_parts.append(str(row['description']))
 
-    print(f"Building vector store with {len(insights_batch)} insights...")
+        text = ' '.join(text_parts)
+
+        if text.strip():
+            insights_batch.append({
+                'insight_id': row['insight_id'],
+                'text': text
+            })
+
+    if not insights_batch:
+        raise ValueError("No valid insights to index")
+
+    print(f"Prepared {len(insights_batch)} insights for indexing...")
 
     # Build index
     store.add_insights_batch(insights_batch)

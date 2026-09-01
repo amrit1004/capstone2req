@@ -13,6 +13,66 @@ def get_connection():
     return sqlite3.connect(config.DATABASE_PATH)
 
 
+def normalize_column_names(df):
+    """Normalize column names to lowercase with underscores."""
+    # Create mapping for common variations
+    column_mapping = {
+        'insight_id': 'insight_id',
+        'insightid': 'insight_id',
+        'insight id': 'insight_id',
+        'id': 'insight_id',
+
+        'persona': 'persona',
+
+        'createddate': 'created_date',
+        'created_date': 'created_date',
+        'created date': 'created_date',
+        'date': 'created_date',
+
+        'therapeuticarea': 'therapeutic_area',
+        'therapeutic_area': 'therapeutic_area',
+        'therapeutic area': 'therapeutic_area',
+        'therapy_area': 'therapeutic_area',
+        'therapy area': 'therapeutic_area',
+
+        'diseasestate': 'disease_state',
+        'disease_state': 'disease_state',
+        'disease state': 'disease_state',
+        'disease': 'disease_state',
+
+        'region_ro': 'region_ro',
+        'regionro': 'region_ro',
+        'region ro': 'region_ro',
+        'region': 'region_ro',
+
+        'countrycode': 'country_code',
+        'country_code': 'country_code',
+        'country code': 'country_code',
+        'country': 'country_code',
+
+        'description': 'description',
+        'insight': 'description',
+        'text': 'description',
+        'notes': 'description',
+        'insight_text': 'description',
+        'insight text': 'description',
+    }
+
+    # Normalize all column names
+    new_columns = []
+    for col in df.columns:
+        # Convert to lowercase and strip whitespace
+        normalized = col.lower().strip().replace(' ', '_')
+        # Check if we have a mapping
+        if normalized in column_mapping:
+            new_columns.append(column_mapping[normalized])
+        else:
+            new_columns.append(normalized)
+
+    df.columns = new_columns
+    return df
+
+
 def init_database():
     """Initialize database with all required tables."""
     conn = get_connection()
@@ -118,20 +178,53 @@ def load_csv_data():
     conn = get_connection()
 
     # Load insights
-    df_insights = pd.read_csv(config.INSIGHTS_CSV)
-    df_insights.columns = [c.lower().replace(' ', '_') for c in df_insights.columns]
+    try:
+        df_insights = pd.read_csv(config.INSIGHTS_CSV, encoding='utf-8')
+    except UnicodeDecodeError:
+        df_insights = pd.read_csv(config.INSIGHTS_CSV, encoding='latin-1')
+
+    print(f"Original columns in insights CSV: {list(df_insights.columns)}")
+    df_insights = normalize_column_names(df_insights)
+    print(f"Normalized columns: {list(df_insights.columns)}")
+
+    # Ensure required columns exist
+    required_cols = ['insight_id', 'description']
+    for col in required_cols:
+        if col not in df_insights.columns:
+            raise ValueError(f"Required column '{col}' not found in insights CSV. Found columns: {list(df_insights.columns)}")
+
+    # Fill missing optional columns
+    optional_cols = ['persona', 'created_date', 'therapeutic_area', 'disease_state', 'region_ro', 'country_code']
+    for col in optional_cols:
+        if col not in df_insights.columns:
+            df_insights[col] = ''
+
     df_insights.to_sql('insights', conn, if_exists='replace', index=False)
     print(f"Loaded {len(df_insights)} insights")
 
     # Load taxonomy SI
-    df_si = pd.read_csv(config.TAXONOMY_SI_CSV)
-    df_si.columns = [c.lower().replace(' ', '_') for c in df_si.columns]
+    try:
+        df_si = pd.read_csv(config.TAXONOMY_SI_CSV, encoding='utf-8')
+    except UnicodeDecodeError:
+        df_si = pd.read_csv(config.TAXONOMY_SI_CSV, encoding='latin-1')
+    except FileNotFoundError:
+        print("Warning: taxonomy_si.csv not found, skipping")
+        df_si = pd.DataFrame(columns=['si_id', 'si_name', 'si_description'])
+
+    df_si = normalize_column_names(df_si)
     df_si.to_sql('taxonomy_si', conn, if_exists='replace', index=False)
     print(f"Loaded {len(df_si)} Strategic Imperatives")
 
     # Load taxonomy CSF
-    df_csf = pd.read_csv(config.TAXONOMY_CSF_CSV)
-    df_csf.columns = [c.lower().replace(' ', '_') for c in df_csf.columns]
+    try:
+        df_csf = pd.read_csv(config.TAXONOMY_CSF_CSV, encoding='utf-8')
+    except UnicodeDecodeError:
+        df_csf = pd.read_csv(config.TAXONOMY_CSF_CSV, encoding='latin-1')
+    except FileNotFoundError:
+        print("Warning: taxonomy_csf.csv not found, skipping")
+        df_csf = pd.DataFrame(columns=['csf_id', 'therapeutic_area', 'csf_name', 'parent_si_id', 'parent_si_name'])
+
+    df_csf = normalize_column_names(df_csf)
     df_csf.to_sql('taxonomy_csf', conn, if_exists='replace', index=False)
     print(f"Loaded {len(df_csf)} Critical Success Factors")
 
