@@ -96,7 +96,7 @@ Respond ONLY with valid JSON, no other text."""
             {"role": "user", "content": prompt}
         ],
         temperature=0.3,
-        max_tokens=800
+        max_completion_tokens=800
     )
 
     try:
@@ -165,7 +165,7 @@ Summary:"""
             {"role": "user", "content": prompt}
         ],
         temperature=0.7,
-        max_tokens=300
+        max_completion_tokens=300
     )
 
     return response.choices[0].message.content.strip()
@@ -190,7 +190,7 @@ Enhanced query (one line):"""
             {"role": "user", "content": prompt}
         ],
         temperature=0.3,
-        max_tokens=100
+        max_completion_tokens=100
     )
 
     return response.choices[0].message.content.strip()

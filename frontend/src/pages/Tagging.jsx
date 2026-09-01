@@ -57,6 +57,8 @@ function Tagging() {
       await fetchData()
     } catch (error) {
       console.error('Error tagging:', error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error'
+      alert(`Tagging failed: ${errorMsg}`)
     } finally {
       setTagging(false)
     }
@@ -69,10 +71,16 @@ function Tagging() {
       const res = await tagBatch()
       setProgress(100)
       await fetchData()
-      alert(`Completed! Success: ${res.data.results.success}, Failed: ${res.data.results.failed}`)
+      const results = res.data.results
+      if (results.failed > 0 && results.last_error) {
+        alert(`Completed with errors!\nSuccess: ${results.success}, Failed: ${results.failed}\n\nLast error: ${results.last_error}`)
+      } else {
+        alert(`Completed! Success: ${results.success}, Failed: ${results.failed}`)
+      }
     } catch (error) {
       console.error('Error:', error)
-      alert('Error during batch tagging. Check API configuration.')
+      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error'
+      alert(`Batch tagging failed: ${errorMsg}`)
     } finally {
       setBatchTagging(false)
     }
@@ -88,13 +96,6 @@ function Tagging() {
     return colors[sentiment] || 'default'
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-      </div>
-    )
-  }
 
   return (
     <div className="animate-fade-in">

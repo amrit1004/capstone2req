@@ -136,7 +136,9 @@ async def tag_single_insight(request: TagRequest):
         result = taxonomy_tagger.tag_single_insight(request.insight_id)
         return {"success": True, "result": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Tagging failed: {str(e)}")
 
 
 @app.post("/api/tags/batch")
@@ -146,7 +148,9 @@ async def tag_all_insights():
         results = taxonomy_tagger.tag_all_insights()
         return {"success": True, "results": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Batch tagging failed: {str(e)}")
 
 
 @app.post("/api/tags/verify")

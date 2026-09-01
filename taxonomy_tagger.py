@@ -1,9 +1,11 @@
 """
 Taxonomy Tagging Module for Medical Insights Engine
 Extracts 10 labels from each insight using LLM
+OPTIMIZED: Parallel processing for faster batch tagging
 """
 import database
 import llm_service
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # Define valid values for each label
@@ -39,19 +41,23 @@ def tag_single_insight(insight_id: str) -> dict:
     # Get insight
     insight = database.get_insight_by_id(insight_id)
     if insight is None:
-        return {"error": "Insight not found"}
+        raise ValueError(f"Insight not found: {insight_id}")
 
     # Get appropriate taxonomy
-    therapeutic_area = insight['therapeutic_area']
+    therapeutic_area = insight.get('therapeutic_area', '') or ''
     taxonomy_si, taxonomy_csf = get_taxonomy_for_area(therapeutic_area)
 
     # Classify using LLM
-    result = llm_service.classify_insight(
-        insight_text=insight['description'],
-        therapeutic_area=therapeutic_area,
-        taxonomy_si=taxonomy_si,
-        taxonomy_csf=taxonomy_csf
-    )
+    try:
+        result = llm_service.classify_insight(
+            insight_text=str(insight.get('description', '')),
+            therapeutic_area=therapeutic_area,
+            taxonomy_si=taxonomy_si,
+            taxonomy_csf=taxonomy_csf
+        )
+    except Exception as e:
+        print(f"LLM Error for {insight_id}: {e}")
+        raise Exception(f"Azure OpenAI Error: {str(e)}")
 
     # Save to database
     database.save_insight_tags(insight_id=insight_id, tags=result)
@@ -59,36 +65,53 @@ def tag_single_insight(insight_id: str) -> dict:
     return result
 
 
-def tag_all_insights(progress_callback=None) -> dict:
-    """Tag all insights in database."""
+def _tag_single_worker(insight_id: str) -> dict:
+    """Worker function for parallel processing."""
+    try:
+        result = tag_single_insight(insight_id)
+        return {'insight_id': insight_id, 'status': 'success', 'result': result}
+    except Exception as e:
+        return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
+
+
+def tag_all_insights(progress_callback=None, max_workers=10) -> dict:
+    """Tag all insights in database using parallel processing."""
     insights_df = database.get_all_insights()
     total = len(insights_df)
+    insight_ids = insights_df['insight_id'].tolist()
+
     results = {
         'total': total,
         'success': 0,
         'failed': 0,
-        'details': []
+        'details': [],
+        'last_error': None
     }
 
-    for idx, row in insights_df.iterrows():
-        try:
-            result = tag_single_insight(row['insight_id'])
-            results['success'] += 1
-            results['details'].append({
-                'insight_id': row['insight_id'],
-                'status': 'success',
-                'result': result
-            })
-        except Exception as e:
-            results['failed'] += 1
-            results['details'].append({
-                'insight_id': row['insight_id'],
-                'status': 'failed',
-                'error': str(e)
-            })
+    completed = 0
+    print(f"Starting parallel batch tagging with {max_workers} workers...")
 
-        if progress_callback:
-            progress_callback(idx + 1, total)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_id = {executor.submit(_tag_single_worker, iid): iid for iid in insight_ids}
+
+        for future in as_completed(future_to_id):
+            completed += 1
+            result = future.result()
+
+            if result['status'] == 'success':
+                results['success'] += 1
+                print(f"Tagged {completed}/{total}: {result['insight_id']} - SUCCESS")
+            else:
+                results['failed'] += 1
+                results['last_error'] = result['error']
+                print(f"Tagged {completed}/{total}: {result['insight_id']} - FAILED: {result['error']}")
+
+            if len(results['details']) < 10:
+                results['details'].append(result)
+
+            if progress_callback:
+                progress_callback(completed, total)
 
     return results
 
