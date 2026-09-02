@@ -93,7 +93,21 @@ class SearchRequest(BaseModel):
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "message": "Medical Insights Engine API is running"}
+    try:
+        # Test database connection
+        insights_df = database.get_all_insights()
+        tags_df = database.get_insight_tags()
+        return {
+            "status": "healthy",
+            "message": "Medical Insights Engine API is running",
+            "insights_count": len(insights_df),
+            "tags_count": len(tags_df)
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 @app.get("/api/insights")

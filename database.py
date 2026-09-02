@@ -241,22 +241,36 @@ def load_csv_data():
 
 def get_all_insights():
     """Get all insights from database."""
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM insights", conn)
-    conn.close()
-    return df
+    conn = None
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query("SELECT * FROM insights", conn)
+        return df
+    except Exception as e:
+        print(f"Error getting all insights: {e}")
+        return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_insight_by_id(insight_id: str):
     """Get single insight by ID."""
-    conn = get_connection()
-    df = pd.read_sql_query(
-        "SELECT * FROM insights WHERE insight_id = ?",
-        conn,
-        params=(insight_id,)
-    )
-    conn.close()
-    return df.iloc[0] if len(df) > 0 else None
+    conn = None
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            "SELECT * FROM insights WHERE insight_id = ?",
+            conn,
+            params=(insight_id,)
+        )
+        return df.iloc[0] if len(df) > 0 else None
+    except Exception as e:
+        print(f"Error getting insight {insight_id}: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_taxonomy_si():
@@ -284,63 +298,71 @@ def get_taxonomy_csf(therapeutic_area: str = None):
 
 def save_insight_tags(insight_id: str, tags: dict):
     """Save AI-generated tags for an insight."""
-    conn = get_connection()
-    cursor = conn.cursor()
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    # Check if tag already exists
-    cursor.execute(
-        "SELECT id FROM insight_tags WHERE insight_id = ?",
-        (insight_id,)
-    )
-    existing = cursor.fetchone()
+        # Check if tag already exists
+        cursor.execute(
+            "SELECT id FROM insight_tags WHERE insight_id = ?",
+            (insight_id,)
+        )
+        existing = cursor.fetchone()
 
-    if existing:
-        cursor.execute("""
-            UPDATE insight_tags
-            SET asset = ?, sentiment = ?, insight_type = ?, topic = ?,
-                stakeholder = ?, si_id = ?, csf_id = ?, source_channel = ?,
-                evidence_gap = ?, action_required = ?, confidence_score = ?, reasoning = ?
-            WHERE insight_id = ?
-        """, (
-            tags.get('asset'),
-            tags.get('sentiment'),
-            tags.get('insight_type'),
-            tags.get('topic'),
-            tags.get('stakeholder'),
-            tags.get('si_id'),
-            tags.get('csf_id'),
-            tags.get('source_channel'),
-            tags.get('evidence_gap'),
-            tags.get('action_required'),
-            tags.get('confidence_score', 0.5),
-            tags.get('reasoning', ''),
-            insight_id
-        ))
-    else:
-        cursor.execute("""
-            INSERT INTO insight_tags
-            (insight_id, asset, sentiment, insight_type, topic, stakeholder,
-             si_id, csf_id, source_channel, evidence_gap, action_required,
-             confidence_score, reasoning)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            insight_id,
-            tags.get('asset'),
-            tags.get('sentiment'),
-            tags.get('insight_type'),
-            tags.get('topic'),
-            tags.get('stakeholder'),
-            tags.get('si_id'),
-            tags.get('csf_id'),
-            tags.get('source_channel'),
-            tags.get('evidence_gap'),
-            tags.get('action_required'),
-            tags.get('confidence_score', 0.5),
-            tags.get('reasoning', '')
-        ))
+        if existing:
+            cursor.execute("""
+                UPDATE insight_tags
+                SET asset = ?, sentiment = ?, insight_type = ?, topic = ?,
+                    stakeholder = ?, si_id = ?, csf_id = ?, source_channel = ?,
+                    evidence_gap = ?, action_required = ?, confidence_score = ?, reasoning = ?
+                WHERE insight_id = ?
+            """, (
+                tags.get('asset'),
+                tags.get('sentiment'),
+                tags.get('insight_type'),
+                tags.get('topic'),
+                tags.get('stakeholder'),
+                tags.get('si_id'),
+                tags.get('csf_id'),
+                tags.get('source_channel'),
+                tags.get('evidence_gap'),
+                tags.get('action_required'),
+                tags.get('confidence_score', 0.5),
+                tags.get('reasoning', ''),
+                insight_id
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO insight_tags
+                (insight_id, asset, sentiment, insight_type, topic, stakeholder,
+                 si_id, csf_id, source_channel, evidence_gap, action_required,
+                 confidence_score, reasoning)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                insight_id,
+                tags.get('asset'),
+                tags.get('sentiment'),
+                tags.get('insight_type'),
+                tags.get('topic'),
+                tags.get('stakeholder'),
+                tags.get('si_id'),
+                tags.get('csf_id'),
+                tags.get('source_channel'),
+                tags.get('evidence_gap'),
+                tags.get('action_required'),
+                tags.get('confidence_score', 0.5),
+                tags.get('reasoning', '')
+            ))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        print(f"Saved tags for {insight_id}")
+    except Exception as e:
+        print(f"Error saving tags for {insight_id}: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_insight_tags(insight_id: str = None):
