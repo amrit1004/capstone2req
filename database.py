@@ -367,45 +367,33 @@ def save_insight_tags(insight_id: str, tags: dict):
 
 def get_insight_tags(insight_id: str = None):
     """Get tags for insights."""
-    conn = get_connection()
+    conn = None
     try:
+        conn = get_connection()
         if insight_id:
             df = pd.read_sql_query("""
-                SELECT it.*
-                FROM insight_tags it
-                WHERE it.insight_id = ?
+                SELECT * FROM insight_tags WHERE insight_id = ?
             """, conn, params=(insight_id,))
         else:
             df = pd.read_sql_query("""
-                SELECT it.*
-                FROM insight_tags it
+                SELECT * FROM insight_tags
             """, conn)
 
-        # Add si_name and csf_name if taxonomy tables exist
-        if not df.empty:
-            try:
-                si_df = pd.read_sql_query("SELECT si_id, si_name FROM taxonomy_si", conn)
-                if not si_df.empty:
-                    df = df.merge(si_df, on='si_id', how='left')
-                else:
-                    df['si_name'] = None
-            except:
-                df['si_name'] = None
+        # Add empty columns for compatibility
+        if 'si_name' not in df.columns:
+            df['si_name'] = None
+        if 'csf_name' not in df.columns:
+            df['csf_name'] = None
 
-            try:
-                csf_df = pd.read_sql_query("SELECT csf_id, csf_name FROM taxonomy_csf", conn)
-                if not csf_df.empty:
-                    df = df.merge(csf_df, on='csf_id', how='left')
-                else:
-                    df['csf_name'] = None
-            except:
-                df['csf_name'] = None
+        return df
     except Exception as e:
         print(f"Error getting tags: {e}")
-        df = pd.DataFrame()
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()
     finally:
-        conn.close()
-    return df
+        if conn:
+            conn.close()
 
 
 def verify_tag(insight_id: str, verified_by: str):
