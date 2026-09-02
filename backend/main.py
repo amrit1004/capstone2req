@@ -28,11 +28,27 @@ import vector_store
 async def lifespan(app: FastAPI):
     # Startup
     try:
+        print("=" * 50)
+        print("STARTING MEDICAL INSIGHTS ENGINE")
+        print("=" * 50)
+        print(f"Working directory: {os.getcwd()}")
+        print(f"Insights CSV path: {os.path.abspath('data/insights_data.csv')}")
+        print(f"CSV exists: {os.path.exists('data/insights_data.csv')}")
+        print("-" * 50)
+
         print("Initializing database...")
         database.init_database()
+
         print("Loading CSV data...")
         database.load_csv_data()
-        print("Database ready!")
+
+        # Verify data loaded
+        insights_df = database.get_all_insights()
+        print(f"Insights loaded: {len(insights_df)}")
+
+        print("=" * 50)
+        print("DATABASE READY!")
+        print("=" * 50)
     except Exception as e:
         print(f"ERROR during startup: {e}")
         import traceback

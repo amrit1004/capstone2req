@@ -178,10 +178,18 @@ def load_csv_data():
     conn = get_connection()
 
     # Load insights
+    print(f"Looking for CSV at: {config.INSIGHTS_CSV}")
     try:
         df_insights = pd.read_csv(config.INSIGHTS_CSV, encoding='utf-8')
+        print(f"Successfully read CSV with {len(df_insights)} rows")
     except UnicodeDecodeError:
         df_insights = pd.read_csv(config.INSIGHTS_CSV, encoding='latin-1')
+        print(f"Read CSV with latin-1 encoding: {len(df_insights)} rows")
+    except FileNotFoundError:
+        print(f"ERROR: CSV file not found at {config.INSIGHTS_CSV}")
+        print("Creating empty insights table...")
+        df_insights = pd.DataFrame(columns=['insight_id', 'description', 'persona', 'created_date',
+                                            'therapeutic_area', 'disease_state', 'region_ro', 'country_code'])
 
     print(f"Original columns in insights CSV: {list(df_insights.columns)}")
     df_insights = normalize_column_names(df_insights)
