@@ -18,6 +18,20 @@ def get_client():
     )
 
 
+import time
+
+def retry_on_error(func, max_retries=3, delay=2):
+    """Retry function with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            print(f"Retry {attempt + 1}/{max_retries} after error: {e}")
+            time.sleep(delay * (attempt + 1))
+
+
 def generate_all_personas_single_call(insight_text: str, tags: dict = None) -> dict:
     """Generate all 3 persona summaries in ONE API call."""
     client = get_client()
@@ -53,15 +67,18 @@ Respond in JSON format:
 
 Each summary should emphasize aspects most relevant to that audience. Use appropriate terminology."""
 
-    response = client.chat.completions.create(
-        model=config.AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": "You are a medical communications expert. Respond with valid JSON only."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_completion_tokens=600
-    )
+    def make_request():
+        return client.chat.completions.create(
+            model=config.AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": "You are a medical communications expert. Respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_completion_tokens=600
+        )
+
+    response = retry_on_error(make_request)
 
     try:
         content = response.choices[0].message.content
@@ -130,7 +147,7 @@ def _generate_worker(insight_id: str) -> dict:
         return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
 
 
-def generate_all_summaries(progress_callback=None, max_workers=10) -> dict:
+def generate_all_summaries(progress_callback=None, max_workers=3) -> dict:
     """Generate persona summaries for all insights using parallel processing."""
     insights_df = database.get_all_insights()
     total = len(insights_df)

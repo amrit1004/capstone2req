@@ -2,8 +2,21 @@
 Azure OpenAI LLM Service for Medical Insights Engine
 """
 import json
+import time
 from openai import AzureOpenAI
 import config
+
+
+def retry_on_error(func, max_retries=3, delay=2):
+    """Retry function with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            print(f"Retry {attempt + 1}/{max_retries} after error: {e}")
+            time.sleep(delay * (attempt + 1))
 
 
 def get_client():
@@ -89,15 +102,18 @@ GUIDELINES:
 
 Respond ONLY with valid JSON, no other text."""
 
-    response = client.chat.completions.create(
-        model=config.AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": "You are a medical insights classification expert. Always respond with valid JSON only."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3,
-        max_completion_tokens=800
-    )
+    def make_request():
+        return client.chat.completions.create(
+            model=config.AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": "You are a medical insights classification expert. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_completion_tokens=800
+        )
+
+    response = retry_on_error(make_request)
 
     try:
         result = json.loads(response.choices[0].message.content)
@@ -158,16 +174,18 @@ Use appropriate terminology for the audience level.
 
 Summary:"""
 
-    response = client.chat.completions.create(
-        model=config.AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": f"You are a medical communications expert writing for {persona_info['name']}s."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_completion_tokens=300
-    )
+    def make_request():
+        return client.chat.completions.create(
+            model=config.AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": f"You are a medical communications expert writing for {persona_info['name']}s."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_completion_tokens=300
+        )
 
+    response = retry_on_error(make_request)
     return response.choices[0].message.content.strip()
 
 

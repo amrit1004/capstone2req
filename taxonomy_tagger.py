@@ -74,7 +74,7 @@ def _tag_single_worker(insight_id: str) -> dict:
         return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
 
 
-def tag_all_insights(progress_callback=None, max_workers=10) -> dict:
+def tag_all_insights(progress_callback=None, max_workers=3) -> dict:
     """Tag all insights in database using parallel processing."""
     insights_df = database.get_all_insights()
     total = len(insights_df)
