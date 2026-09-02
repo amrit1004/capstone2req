@@ -1,0 +1,72 @@
+Create a professional PPT presentation for my capstone project: "AI-Driven Medical Insights Engine"
+
+## Project Overview:
+- An LLM-powered system that reads unstructured medical insight notes and:
+  1. Tags each note with 10 structured labels using AI
+  2. Generates 3 persona-specific summaries for different audiences
+  3. Provides semantic search across all insights
+  4. Includes human review/correction workflow
+  5. Measures AI accuracy with ground truth comparison
+
+## Tech Stack:
+- Frontend: React 18 + Vite + Tailwind CSS
+- Backend: FastAPI (Python)
+- Database: SQLite
+- Vector Search: TF-IDF (scikit-learn)
+- AI: Azure OpenAI (GPT-4o-mini)
+
+## The 10 Extracted Labels:
+1. Asset (BI compound code)
+2. Sentiment (Positive/Negative/Neutral/Mixed)
+3. Insight Type (Data Request/Feedback/Concern/Question/Recommendation/Objection)
+4. Topic (Efficacy/Safety/Tolerability/Dosing/Access/Differentiation/Evidence/Biomarker)
+5. Stakeholder (KOL/Investigator/Site Coordinator/MSL/Payer/HCP/Medical Director/Regulatory)
+6. Strategic Imperative (SI-01 to SI-05)
+7. Critical Success Factor (CSF ID)
+8. Source Channel (Field Visit/Advisory Board/Conference/Email/Call/Meeting)
+9. Evidence Gap (RWE/Head-to-head/Long-term/Subgroup/Biomarker/Comparative/None)
+10. Action Required (Follow-up/Data Generation/Internal Review/Escalate/None)
+
+## 3 Personas:
+1. Clinician - Focus on patient care, treatment decisions
+2. Medical Scientist - Focus on research, evidence gaps, mechanisms
+3. Commercial - Focus on market positioning, competitive landscape
+
+## Key Features:
+- Dashboard with overview stats and charts
+- Batch tagging with parallel processing (10 workers)
+- Single insight tagging
+- Human review & correction workflow
+- Semantic search using TF-IDF
+- Persona summary generation (all 3 in one API call)
+- Ground truth comparison for accuracy measurement
+- Precision metrics based on human review
+
+## Data Flow:
+CSV Data → SQLite DB → Azure OpenAI → 10 Labels → Human Review → Verified Tags
+
+## Accuracy Metrics:
+- Ground Truth Accuracy: Compare AI vs manually labeled samples
+- Human Review Precision: (Verified - Corrections) / Verified × 100%
+
+## Architecture Layers:
+1. Presentation Layer (React UI - 6 pages)
+2. API Layer (FastAPI endpoints)
+3. Processing Services (Python modules)
+4. Data Layer (SQLite + CSV files)
+
+Create 10-12 slides covering:
+1. Title slide
+2. Problem Statement / Business Challenge
+3. Solution Overview
+4. System Architecture
+5. Tech Stack
+6. 10 Labels Extraction
+7. 3 Persona Summaries
+8. Human Review Workflow
+9. Accuracy Metrics
+10. Demo Screenshots (placeholder)
+11. Key Deliverables
+12. Thank You / Q&A
+
+Use a modern, professional design with blue/purple gradient theme.
