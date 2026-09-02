@@ -385,6 +385,14 @@ def get_insight_tags(insight_id: str = None):
         if 'csf_name' not in df.columns:
             df['csf_name'] = None
 
+        # Fix invalid float values (NaN, Inf) - replace with valid defaults
+        if 'confidence_score' in df.columns:
+            df['confidence_score'] = df['confidence_score'].fillna(0.5)
+            df['confidence_score'] = df['confidence_score'].replace([float('inf'), float('-inf')], 0.5)
+
+        # Replace NaN with None for JSON compatibility
+        df = df.where(pd.notnull(df), None)
+
         return df
     except Exception as e:
         print(f"Error getting tags: {e}")
@@ -398,15 +406,23 @@ def get_insight_tags(insight_id: str = None):
 
 def verify_tag(insight_id: str, verified_by: str):
     """Mark a tag as verified by human reviewer."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE insight_tags
-        SET is_verified = 1, verified_by = ?, verified_at = CURRENT_TIMESTAMP
-        WHERE insight_id = ?
-    """, (verified_by, insight_id))
-    conn.commit()
-    conn.close()
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE insight_tags
+            SET is_verified = 1, verified_by = ?, verified_at = CURRENT_TIMESTAMP
+            WHERE insight_id = ?
+        """, (verified_by, insight_id))
+        conn.commit()
+        print(f"Verified tag for {insight_id} by {verified_by}")
+    except Exception as e:
+        print(f"Error verifying tag {insight_id}: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 
 def save_correction(insight_id: str, field_name: str, original_value: str,

@@ -151,7 +151,15 @@ async def get_all_tags():
     """Get all insight tags."""
     try:
         df = database.get_insight_tags()
-        return {"tags": df.to_dict('records')}
+        # Convert to records and handle NaN/None
+        records = df.to_dict('records')
+        # Clean up any remaining NaN values
+        import math
+        for record in records:
+            for key, value in record.items():
+                if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                    record[key] = None
+        return {"tags": records}
     except Exception as e:
         import traceback
         traceback.print_exc()
