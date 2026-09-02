@@ -43,4 +43,15 @@ export const generatePersonaSummaries = (insightId) => api.post(`/personas/gener
 export const generateAllPersonas = () => api.post('/personas/generate-all')
 export const getPersonaSummaries = (insightId) => api.get(`/personas/${insightId}`)
 
+// Ground Truth
+export const exportGroundTruthTemplate = (limit = 100) => api.get(`/ground-truth/export-template?limit=${limit}`, { responseType: 'blob' })
+export const compareGroundTruth = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/ground-truth/compare', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+export const getSampleGroundTruth = () => api.get('/ground-truth/sample')
+
 export default api

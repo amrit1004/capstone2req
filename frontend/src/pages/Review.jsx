@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { CheckCircle, Edit3, User, Package, MessageSquare, Lightbulb, Target, Users, Radio, FileSearch, AlertCircle, Brain } from 'lucide-react'
+import { CheckCircle, Edit3, User, Package, MessageSquare, Lightbulb, Target, Users, Radio, FileSearch, AlertCircle, Brain, RefreshCw } from 'lucide-react'
 import { Card, Badge, Button } from '../components/Card'
 import { getTags, getInsights, getLabelOptions, getTaxonomySI, getTaxonomyCSF, verifyTag, correctTag } from '../api'
 
@@ -27,10 +27,17 @@ function Review() {
   const [corrections, setCorrections] = useState({})
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     fetchData()
   }, [])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await fetchData()
+    setRefreshing(false)
+  }
 
   const fetchData = async () => {
     try {
@@ -123,9 +130,18 @@ function Review() {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Review & Correct</h1>
-        <p className="text-slate-500 dark:text-slate-400">Verify AI-generated labels and make corrections</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Review & Correct</h1>
+          <p className="text-slate-500 dark:text-slate-400">
+            Verify AI-generated labels and make corrections
+            {tags.length > 0 && <span className="text-primary-500 font-medium ml-2">({tags.length} pending)</span>}
+          </p>
+        </div>
+        <Button onClick={handleRefresh} variant="secondary" loading={refreshing}>
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Reviewer Input */}

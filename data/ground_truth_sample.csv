@@ -1,0 +1,11 @@
+insight_id,asset,sentiment,insight_type,topic,stakeholder,si_id,csf_id,source_channel,evidence_gap,action_required
+CDO-100001,BI-291984,Positive,Feedback,Efficacy,KOL,SI-01,ONC-CSF-01,Field Visit,RWE,Follow-up
+CDO-100002,,Negative,Concern,Safety,HCP,SI-02,CV-CSF-02,Conference,Long-term,Escalate
+CDO-100003,BI-456789,Neutral,Data Request,Evidence,Investigator,SI-03,ONC-CSF-03,Advisory Board,Head-to-head,Data Generation
+CDM-100001,,Mixed,Question,Dosing,MSL,SI-01,IMM-CSF-01,Email,Subgroup,Internal Review
+CDM-100002,BI-291984,Positive,Recommendation,Differentiation,Medical Director,SI-04,ONC-CSF-02,Meeting,Biomarker,Follow-up
+CDM-100003,,Negative,Objection,Access,Payer,SI-05,CV-CSF-01,Call,Comparative,Escalate
+MSI-100001,BI-123456,Positive,Feedback,Tolerability,KOL,SI-02,IMM-CSF-02,Field Visit,RWE,None
+MSI-100002,,Neutral,Question,Biomarker,Investigator,SI-03,ONC-CSF-01,Conference,None,Data Generation
+MSI-100003,BI-291984,Mixed,Concern,Safety,HCP,SI-01,CV-CSF-03,Advisory Board,Long-term,Internal Review
+MSI-100004,,Positive,Recommendation,Efficacy,Site Coordinator,SI-04,ONC-CSF-03,Meeting,Head-to-head,Follow-up

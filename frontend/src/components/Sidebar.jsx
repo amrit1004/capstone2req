@@ -50,10 +50,10 @@ function Sidebar({ darkMode, setDarkMode, sidebarOpen, setSidebarOpen }) {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 group ${
                 isActive
-                  ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg shadow-primary-500/25'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                  ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/40 hover:scale-[1.02]'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-primary-50 dark:hover:bg-slate-700 hover:text-primary-600 dark:hover:text-primary-400 hover:translate-x-1'
               }`
             }
           >
@@ -70,7 +70,7 @@ function Sidebar({ darkMode, setDarkMode, sidebarOpen, setSidebarOpen }) {
         {/* Theme toggle */}
         <button
           onClick={() => setDarkMode(!darkMode)}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all duration-200"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-amber-400 transition-all duration-300 hover:translate-x-1"
         >
           {darkMode ? (
             <Sun className={`w-5 h-5 flex-shrink-0 ${!sidebarOpen && 'mx-auto'}`} />
@@ -87,7 +87,7 @@ function Sidebar({ darkMode, setDarkMode, sidebarOpen, setSidebarOpen }) {
         {/* Collapse toggle */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all duration-200 mt-1"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-all duration-300 mt-1"
         >
           {sidebarOpen ? (
             <>
