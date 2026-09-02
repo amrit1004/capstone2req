@@ -17,6 +17,7 @@ const LABEL_CONFIG = [
 ]
 
 function Review() {
+  const [allTags, setAllTags] = useState([])
   const [tags, setTags] = useState([])
   const [insights, setInsights] = useState({})
   const [labelOptions, setLabelOptions] = useState({})
@@ -28,10 +29,19 @@ function Review() {
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [showAll, setShowAll] = useState(false)
 
   useEffect(() => {
     fetchData()
   }, [])
+
+  useEffect(() => {
+    if (showAll) {
+      setTags(allTags)
+    } else {
+      setTags(allTags.filter(t => !t.is_verified))
+    }
+  }, [showAll, allTags])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -49,8 +59,14 @@ function Review() {
         getTaxonomyCSF()
       ])
 
-      const unverified = (tagsRes.data.tags || []).filter(t => !t.is_verified)
-      setTags(unverified)
+      const allTagsData = tagsRes.data.tags || []
+      setAllTags(allTagsData)
+
+      if (showAll) {
+        setTags(allTagsData)
+      } else {
+        setTags(allTagsData.filter(t => !t.is_verified))
+      }
 
       const insightsMap = {}
       ;(insightsRes.data.insights || []).forEach(i => {
@@ -135,13 +151,26 @@ function Review() {
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Review & Correct</h1>
           <p className="text-slate-500 dark:text-slate-400">
             Verify AI-generated labels and make corrections
-            {tags.length > 0 && <span className="text-primary-500 font-medium ml-2">({tags.length} pending)</span>}
+            <span className="text-primary-500 font-medium ml-2">
+              ({tags.length} {showAll ? 'total' : 'pending'} / {allTags.length} total)
+            </span>
           </p>
         </div>
-        <Button onClick={handleRefresh} variant="secondary" loading={refreshing}>
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500"
+            />
+            <span className="text-sm text-slate-600 dark:text-slate-400">Show All</span>
+          </label>
+          <Button onClick={handleRefresh} variant="secondary" loading={refreshing}>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Reviewer Input */}

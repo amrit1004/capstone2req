@@ -338,22 +338,43 @@ def save_insight_tags(insight_id: str, tags: dict):
 def get_insight_tags(insight_id: str = None):
     """Get tags for insights."""
     conn = get_connection()
-    if insight_id:
-        df = pd.read_sql_query("""
-            SELECT it.*, ts.si_name, tc.csf_name
-            FROM insight_tags it
-            LEFT JOIN taxonomy_si ts ON it.si_id = ts.si_id
-            LEFT JOIN taxonomy_csf tc ON it.csf_id = tc.csf_id
-            WHERE it.insight_id = ?
-        """, conn, params=(insight_id,))
-    else:
-        df = pd.read_sql_query("""
-            SELECT it.*, ts.si_name, tc.csf_name
-            FROM insight_tags it
-            LEFT JOIN taxonomy_si ts ON it.si_id = ts.si_id
-            LEFT JOIN taxonomy_csf tc ON it.csf_id = tc.csf_id
-        """, conn)
-    conn.close()
+    try:
+        if insight_id:
+            df = pd.read_sql_query("""
+                SELECT it.*
+                FROM insight_tags it
+                WHERE it.insight_id = ?
+            """, conn, params=(insight_id,))
+        else:
+            df = pd.read_sql_query("""
+                SELECT it.*
+                FROM insight_tags it
+            """, conn)
+
+        # Add si_name and csf_name if taxonomy tables exist
+        if not df.empty:
+            try:
+                si_df = pd.read_sql_query("SELECT si_id, si_name FROM taxonomy_si", conn)
+                if not si_df.empty:
+                    df = df.merge(si_df, on='si_id', how='left')
+                else:
+                    df['si_name'] = None
+            except:
+                df['si_name'] = None
+
+            try:
+                csf_df = pd.read_sql_query("SELECT csf_id, csf_name FROM taxonomy_csf", conn)
+                if not csf_df.empty:
+                    df = df.merge(csf_df, on='csf_id', how='left')
+                else:
+                    df['csf_name'] = None
+            except:
+                df['csf_name'] = None
+    except Exception as e:
+        print(f"Error getting tags: {e}")
+        df = pd.DataFrame()
+    finally:
+        conn.close()
     return df
 
 

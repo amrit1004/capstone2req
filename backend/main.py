@@ -119,8 +119,13 @@ async def get_label_options():
 @app.get("/api/tags")
 async def get_all_tags():
     """Get all insight tags."""
-    df = database.get_insight_tags()
-    return {"tags": df.to_dict('records')}
+    try:
+        df = database.get_insight_tags()
+        return {"tags": df.to_dict('records')}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error getting tags: {str(e)}")
 
 
 @app.get("/api/tags/{insight_id}")
