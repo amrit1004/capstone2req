@@ -526,16 +526,23 @@ def save_persona_summary(insight_id: str, persona_type: str, summary: str):
     conn.close()
 
 
-def get_persona_summaries(insight_id: str):
-    """Get all persona summaries for an insight."""
-    conn = get_connection()
-    df = pd.read_sql_query(
-        "SELECT * FROM persona_summaries WHERE insight_id = ?",
-        conn,
-        params=(insight_id,)
-    )
-    conn.close()
-    return df
+def get_persona_summaries(insight_id: str = None):
+    """Get persona summaries. If insight_id is None, return all summaries."""
+    conn = None
+    try:
+        conn = get_connection()
+        if insight_id:
+            df = pd.read_sql_query(
+                "SELECT * FROM persona_summaries WHERE insight_id = ?",
+                conn,
+                params=(insight_id,)
+            )
+        else:
+            df = pd.read_sql_query("SELECT * FROM persona_summaries", conn)
+        return df
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_accuracy_metrics():

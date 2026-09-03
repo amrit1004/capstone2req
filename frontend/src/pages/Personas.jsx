@@ -18,6 +18,7 @@ function Personas() {
   const [generating, setGenerating] = useState(false)
   const [generatingAll, setGeneratingAll] = useState(false)
   const [batchLimit, setBatchLimit] = useState('')
+  const [skipGenerated, setSkipGenerated] = useState(true)
 
   useEffect(() => {
     fetchInsights()
@@ -64,7 +65,7 @@ function Personas() {
     setGeneratingAll(true)
     try {
       const limit = batchLimit ? parseInt(batchLimit) : null
-      const res = await generateAllPersonas(limit)
+      const res = await generateAllPersonas(limit, skipGenerated)
       alert(`Generated summaries for ${res.data.results.success} insights`)
     } catch (error) {
       console.error('Error:', error)
@@ -111,7 +112,7 @@ function Personas() {
             <h3 className="font-semibold text-slate-900 dark:text-white">Batch Generation</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">Generate persona summaries</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <label className="text-sm text-slate-600 dark:text-slate-400">Limit:</label>
             <input
               type="number"
@@ -121,6 +122,15 @@ function Personas() {
               min="1"
               className="w-24 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none"
             />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={skipGenerated}
+                onChange={(e) => setSkipGenerated(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500"
+              />
+              <span className="text-sm text-slate-600 dark:text-slate-400">Skip generated</span>
+            </label>
             <Button onClick={handleGenerateAll} loading={generatingAll}>
               <Sparkles className="w-4 h-4" />
               Generate

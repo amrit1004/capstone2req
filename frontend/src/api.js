@@ -20,7 +20,7 @@ export const getLabelOptions = () => api.get('/label-options')
 export const getTags = () => api.get('/tags')
 export const getTag = (id) => api.get(`/tags/${id}`)
 export const tagSingle = (insightId) => api.post('/tags/single', { insight_id: insightId })
-export const tagBatch = (limit = null) => api.post('/tags/batch', { limit })
+export const tagBatch = (limit = null, skipTagged = false) => api.post('/tags/batch', { limit, skip_tagged: skipTagged })
 export const verifyTag = (insightId, verifiedBy) => api.post('/tags/verify', { insight_id: insightId, verified_by: verifiedBy })
 export const correctTag = (insightId, corrections, reason, correctedBy) => api.post('/tags/correct', {
   insight_id: insightId,
@@ -40,7 +40,7 @@ export const searchInsights = (query, topK = 5) => api.post('/search', { query, 
 
 // Personas
 export const generatePersonaSummaries = (insightId) => api.post(`/personas/generate/${insightId}`)
-export const generateAllPersonas = (limit = null) => api.post('/personas/generate-all', { limit })
+export const generateAllPersonas = (limit = null, skipGenerated = false) => api.post('/personas/generate-all', { limit, skip_generated: skipGenerated })
 export const getPersonaSummaries = (insightId) => api.get(`/personas/${insightId}`)
 
 // Ground Truth

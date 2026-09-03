@@ -189,13 +189,15 @@ async def tag_single_insight(request: TagRequest):
 
 class BatchTagRequest(BaseModel):
     limit: Optional[int] = None  # None means all insights
+    skip_tagged: Optional[bool] = False  # Skip already tagged insights
 
 @app.post("/api/tags/batch")
 async def tag_all_insights(request: BatchTagRequest = None):
-    """Tag insights. Optionally specify limit."""
+    """Tag insights. Optionally specify limit and skip already tagged."""
     try:
         limit = request.limit if request else None
-        results = taxonomy_tagger.tag_all_insights(limit=limit)
+        skip_tagged = request.skip_tagged if request else False
+        results = taxonomy_tagger.tag_all_insights(limit=limit, skip_tagged=skip_tagged)
         return {"success": True, "results": results}
     except Exception as e:
         import traceback
@@ -309,13 +311,15 @@ async def generate_persona_summaries(insight_id: str):
 
 class PersonaBatchRequest(BaseModel):
     limit: Optional[int] = None
+    skip_generated: Optional[bool] = False
 
 @app.post("/api/personas/generate-all")
 async def generate_all_persona_summaries(request: PersonaBatchRequest = None):
-    """Generate persona summaries. Optionally specify limit."""
+    """Generate persona summaries. Optionally specify limit and skip generated."""
     try:
         limit = request.limit if request else None
-        results = persona_generator.generate_all_summaries(limit=limit)
+        skip_generated = request.skip_generated if request else False
+        results = persona_generator.generate_all_summaries(limit=limit, skip_generated=skip_generated)
         return {"success": True, "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

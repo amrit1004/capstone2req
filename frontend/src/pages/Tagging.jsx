@@ -27,6 +27,7 @@ function Tagging() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState(null)
   const [batchLimit, setBatchLimit] = useState('')  // empty = all
+  const [skipTagged, setSkipTagged] = useState(true)  // skip already tagged by default
 
   useEffect(() => {
     fetchData()
@@ -89,7 +90,7 @@ function Tagging() {
     setProgress(0)
     try {
       const limit = batchLimit ? parseInt(batchLimit) : null
-      const res = await tagBatch(limit)
+      const res = await tagBatch(limit, skipTagged)
       setProgress(100)
       // Refresh tags list
       const tagsRes = await getTags()
@@ -164,6 +165,16 @@ function Tagging() {
             />
             <span className="text-xs text-slate-400">of {insights.length} insights</span>
           </div>
+
+          <label className="flex items-center gap-2 mb-4 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={skipTagged}
+              onChange={(e) => setSkipTagged(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-primary-500 focus:ring-primary-500"
+            />
+            <span className="text-sm text-slate-600 dark:text-slate-400">Skip already tagged insights</span>
+          </label>
 
           {batchTagging && (
             <div className="mb-4">

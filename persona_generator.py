@@ -147,9 +147,16 @@ def _generate_worker(insight_id: str) -> dict:
         return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
 
 
-def generate_all_summaries(progress_callback=None, max_workers=10, limit=None) -> dict:
-    """Generate persona summaries using parallel processing. Optionally limit count."""
+def generate_all_summaries(progress_callback=None, max_workers=10, limit=None, skip_generated=False) -> dict:
+    """Generate persona summaries using parallel processing. Optionally limit count and skip generated."""
     insights_df = database.get_all_insights()
+
+    # Skip already generated insights if requested
+    if skip_generated:
+        summaries_df = database.get_persona_summaries()
+        generated_ids = set(summaries_df['insight_id'].tolist()) if not summaries_df.empty else set()
+        insights_df = insights_df[~insights_df['insight_id'].isin(generated_ids)]
+        print(f"Skipping {len(generated_ids)} already generated insights")
 
     # Apply limit if specified
     if limit and limit > 0:

@@ -74,9 +74,16 @@ def _tag_single_worker(insight_id: str) -> dict:
         return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
 
 
-def tag_all_insights(progress_callback=None, max_workers=10, limit=None) -> dict:
-    """Tag insights in database using parallel processing. Optionally limit count."""
+def tag_all_insights(progress_callback=None, max_workers=10, limit=None, skip_tagged=False) -> dict:
+    """Tag insights in database using parallel processing. Optionally limit count and skip tagged."""
     insights_df = database.get_all_insights()
+
+    # Skip already tagged insights if requested
+    if skip_tagged:
+        tagged_df = database.get_insight_tags()
+        tagged_ids = set(tagged_df['insight_id'].tolist()) if not tagged_df.empty else set()
+        insights_df = insights_df[~insights_df['insight_id'].isin(tagged_ids)]
+        print(f"Skipping {len(tagged_ids)} already tagged insights")
 
     # Apply limit if specified
     if limit and limit > 0:
