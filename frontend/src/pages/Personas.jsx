@@ -17,6 +17,7 @@ function Personas() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [generatingAll, setGeneratingAll] = useState(false)
+  const [batchLimit, setBatchLimit] = useState('')
 
   useEffect(() => {
     fetchInsights()
@@ -62,7 +63,8 @@ function Personas() {
   const handleGenerateAll = async () => {
     setGeneratingAll(true)
     try {
-      const res = await generateAllPersonas()
+      const limit = batchLimit ? parseInt(batchLimit) : null
+      const res = await generateAllPersonas(limit)
       alert(`Generated summaries for ${res.data.results.success} insights`)
     } catch (error) {
       console.error('Error:', error)
@@ -104,15 +106,26 @@ function Personas() {
 
       {/* Generate All */}
       <Card className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h3 className="font-semibold text-slate-900 dark:text-white">Batch Generation</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Generate summaries for all insights</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Generate persona summaries</p>
           </div>
-          <Button onClick={handleGenerateAll} loading={generatingAll}>
-            <Sparkles className="w-4 h-4" />
-            Generate All
-          </Button>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-slate-600 dark:text-slate-400">Limit:</label>
+            <input
+              type="number"
+              value={batchLimit}
+              onChange={(e) => setBatchLimit(e.target.value)}
+              placeholder="All"
+              min="1"
+              className="w-24 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+            <Button onClick={handleGenerateAll} loading={generatingAll}>
+              <Sparkles className="w-4 h-4" />
+              Generate
+            </Button>
+          </div>
         </div>
       </Card>
 

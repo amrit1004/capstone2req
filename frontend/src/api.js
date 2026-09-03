@@ -40,7 +40,7 @@ export const searchInsights = (query, topK = 5) => api.post('/search', { query, 
 
 // Personas
 export const generatePersonaSummaries = (insightId) => api.post(`/personas/generate/${insightId}`)
-export const generateAllPersonas = () => api.post('/personas/generate-all')
+export const generateAllPersonas = (limit = null) => api.post('/personas/generate-all', { limit })
 export const getPersonaSummaries = (insightId) => api.get(`/personas/${insightId}`)
 
 // Ground Truth

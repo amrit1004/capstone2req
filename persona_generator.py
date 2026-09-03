@@ -147,9 +147,14 @@ def _generate_worker(insight_id: str) -> dict:
         return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
 
 
-def generate_all_summaries(progress_callback=None, max_workers=3) -> dict:
-    """Generate persona summaries for all insights using parallel processing."""
+def generate_all_summaries(progress_callback=None, max_workers=10, limit=None) -> dict:
+    """Generate persona summaries using parallel processing. Optionally limit count."""
     insights_df = database.get_all_insights()
+
+    # Apply limit if specified
+    if limit and limit > 0:
+        insights_df = insights_df.head(limit)
+
     total = len(insights_df)
     insight_ids = insights_df['insight_id'].tolist()
 

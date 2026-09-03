@@ -307,11 +307,15 @@ async def generate_persona_summaries(insight_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class PersonaBatchRequest(BaseModel):
+    limit: Optional[int] = None
+
 @app.post("/api/personas/generate-all")
-async def generate_all_persona_summaries():
-    """Generate persona summaries for all insights."""
+async def generate_all_persona_summaries(request: PersonaBatchRequest = None):
+    """Generate persona summaries. Optionally specify limit."""
     try:
-        results = persona_generator.generate_all_summaries()
+        limit = request.limit if request else None
+        results = persona_generator.generate_all_summaries(limit=limit)
         return {"success": True, "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
