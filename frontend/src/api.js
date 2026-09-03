@@ -20,7 +20,7 @@ export const getLabelOptions = () => api.get('/label-options')
 export const getTags = () => api.get('/tags')
 export const getTag = (id) => api.get(`/tags/${id}`)
 export const tagSingle = (insightId) => api.post('/tags/single', { insight_id: insightId })
-export const tagBatch = () => api.post('/tags/batch')
+export const tagBatch = (limit = null) => api.post('/tags/batch', { limit })
 export const verifyTag = (insightId, verifiedBy) => api.post('/tags/verify', { insight_id: insightId, verified_by: verifiedBy })
 export const correctTag = (insightId, corrections, reason, correctedBy) => api.post('/tags/correct', {
   insight_id: insightId,

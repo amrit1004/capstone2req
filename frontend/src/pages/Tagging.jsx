@@ -26,6 +26,7 @@ function Tagging() {
   const [refreshing, setRefreshing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState(null)
+  const [batchLimit, setBatchLimit] = useState('')  // empty = all
 
   useEffect(() => {
     fetchData()
@@ -87,7 +88,8 @@ function Tagging() {
     setBatchTagging(true)
     setProgress(0)
     try {
-      const res = await tagBatch()
+      const limit = batchLimit ? parseInt(batchLimit) : null
+      const res = await tagBatch(limit)
       setProgress(100)
       // Refresh tags list
       const tagsRes = await getTags()
@@ -147,7 +149,21 @@ function Tagging() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <Card className="hover:shadow-lg transition-shadow">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Batch Processing</h3>
-          <p className="text-slate-500 dark:text-slate-400 mb-4">Extract all 10 labels from every insight using AI</p>
+          <p className="text-slate-500 dark:text-slate-400 mb-4">Extract all 10 labels from insights using AI</p>
+
+          <div className="flex items-center gap-3 mb-4">
+            <label className="text-sm text-slate-600 dark:text-slate-400">Limit:</label>
+            <input
+              type="number"
+              value={batchLimit}
+              onChange={(e) => setBatchLimit(e.target.value)}
+              placeholder="All"
+              min="1"
+              max={insights.length}
+              className="w-24 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+            <span className="text-xs text-slate-400">of {insights.length} insights</span>
+          </div>
 
           {batchTagging && (
             <div className="mb-4">

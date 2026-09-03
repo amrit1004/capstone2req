@@ -187,11 +187,15 @@ async def tag_single_insight(request: TagRequest):
         raise HTTPException(status_code=500, detail=f"Tagging failed: {str(e)}")
 
 
+class BatchTagRequest(BaseModel):
+    limit: Optional[int] = None  # None means all insights
+
 @app.post("/api/tags/batch")
-async def tag_all_insights():
-    """Tag all insights."""
+async def tag_all_insights(request: BatchTagRequest = None):
+    """Tag insights. Optionally specify limit."""
     try:
-        results = taxonomy_tagger.tag_all_insights()
+        limit = request.limit if request else None
+        results = taxonomy_tagger.tag_all_insights(limit=limit)
         return {"success": True, "results": results}
     except Exception as e:
         import traceback

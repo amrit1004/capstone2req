@@ -74,9 +74,14 @@ def _tag_single_worker(insight_id: str) -> dict:
         return {'insight_id': insight_id, 'status': 'failed', 'error': str(e)}
 
 
-def tag_all_insights(progress_callback=None, max_workers=3) -> dict:
-    """Tag all insights in database using parallel processing."""
+def tag_all_insights(progress_callback=None, max_workers=10, limit=None) -> dict:
+    """Tag insights in database using parallel processing. Optionally limit count."""
     insights_df = database.get_all_insights()
+
+    # Apply limit if specified
+    if limit and limit > 0:
+        insights_df = insights_df.head(limit)
+
     total = len(insights_df)
     insight_ids = insights_df['insight_id'].tolist()
 
