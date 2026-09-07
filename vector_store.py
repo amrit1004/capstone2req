@@ -10,6 +10,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import config
 import database
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class VectorStore:
@@ -42,9 +45,9 @@ class VectorStore:
                     self.insight_ids = pickle.load(f)
                 with open(self.docs_path, 'rb') as f:
                     self.documents = pickle.load(f)
-                print(f"Loaded existing index with {len(self.insight_ids)} documents")
+                logger.info(f"Loaded existing index with {len(self.insight_ids)} documents")
         except Exception as e:
-            print(f"No existing index found or error loading: {e}")
+            logger.debug(f"No existing index found: {e}")
             self.vectorizer = None
             self.vectors = None
             self.insight_ids = []
@@ -61,9 +64,9 @@ class VectorStore:
                 pickle.dump(self.insight_ids, f)
             with open(self.docs_path, 'wb') as f:
                 pickle.dump(self.documents, f)
-            print("Index saved to disk")
+            logger.debug("Index saved to disk")
         except Exception as e:
-            print(f"Error saving index: {e}")
+            logger.error(f"Error saving index: {e}")
             raise
 
     def add_insights_batch(self, insights: list):
@@ -77,7 +80,7 @@ class VectorStore:
         self.insight_ids = [str(i['insight_id']) for i in insights]
         self.documents = [str(i['text']) for i in insights]
 
-        print(f"Building TF-IDF index for {len(self.documents)} documents...")
+        logger.info(f"Building TF-IDF index for {len(self.documents)} documents")
 
         # Build TF-IDF vectorizer
         self.vectorizer = TfidfVectorizer(
@@ -90,7 +93,7 @@ class VectorStore:
 
         # Fit and transform documents
         self.vectors = self.vectorizer.fit_transform(self.documents)
-        print(f"TF-IDF matrix shape: {self.vectors.shape}")
+        logger.debug(f"TF-IDF matrix shape: {self.vectors.shape}")
 
         # Save to disk
         self._save_index()
@@ -142,27 +145,27 @@ class VectorStore:
                 if os.path.exists(path):
                     os.remove(path)
             except Exception as e:
-                print(f"Error deleting {path}: {e}")
+                logger.warning(f"Error deleting {path}: {e}")
 
 
 def build_vector_store():
     """Build vector store from all insights in database."""
-    print("Starting vector store build...")
+    logger.info("Starting vector store build")
 
     store = VectorStore()
 
     # Clear existing data
-    print("Clearing existing index...")
+    logger.info("Clearing existing index")
     store.clear_collection()
 
     # Get all insights
-    print("Loading insights from database...")
+    logger.info("Loading insights from database")
     insights_df = database.get_all_insights()
 
     if insights_df.empty:
         raise ValueError("No insights found in database")
 
-    print(f"Found {len(insights_df)} insights")
+    logger.info(f"Found {len(insights_df)} insights")
 
     # Prepare batch data
     insights_batch = []
@@ -187,12 +190,12 @@ def build_vector_store():
     if not insights_batch:
         raise ValueError("No valid insights to index")
 
-    print(f"Prepared {len(insights_batch)} insights for indexing...")
+    logger.info(f"Prepared {len(insights_batch)} insights for indexing")
 
     # Build index
     store.add_insights_batch(insights_batch)
 
-    print(f"Vector store built! Total documents: {store.get_index_size()}")
+    logger.info(f"Vector store built! Total documents: {store.get_index_size()}")
     return store
 
 

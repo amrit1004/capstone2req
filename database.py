@@ -5,6 +5,9 @@ import sqlite3
 import pandas as pd
 from pathlib import Path
 import config
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_connection():
@@ -168,9 +171,22 @@ def init_database():
         )
     """)
 
+    # Users table for authentication
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'clinician',
+            is_evaluator INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
-    print("Database initialized successfully!")
+    logger.info("Database initialized successfully")
 
 
 def load_csv_data():
@@ -178,22 +194,22 @@ def load_csv_data():
     conn = get_connection()
 
     # Load insights
-    print(f"Looking for CSV at: {config.INSIGHTS_CSV}")
+    logger.info(f"Looking for CSV at: {config.INSIGHTS_CSV}")
     try:
         df_insights = pd.read_csv(config.INSIGHTS_CSV, encoding='utf-8')
-        print(f"Successfully read CSV with {len(df_insights)} rows")
+        logger.info(f"Successfully read CSV with {len(df_insights)} rows")
     except UnicodeDecodeError:
         df_insights = pd.read_csv(config.INSIGHTS_CSV, encoding='latin-1')
-        print(f"Read CSV with latin-1 encoding: {len(df_insights)} rows")
+        logger.info(f"Read CSV with latin-1 encoding: {len(df_insights)} rows")
     except FileNotFoundError:
-        print(f"ERROR: CSV file not found at {config.INSIGHTS_CSV}")
-        print("Creating empty insights table...")
+        logger.error(f"CSV file not found at {config.INSIGHTS_CSV}")
+        logger.warning("Creating empty insights table")
         df_insights = pd.DataFrame(columns=['insight_id', 'description', 'persona', 'created_date',
                                             'therapeutic_area', 'disease_state', 'region_ro', 'country_code'])
 
-    print(f"Original columns in insights CSV: {list(df_insights.columns)}")
+    logger.debug(f"Original columns: {list(df_insights.columns)}")
     df_insights = normalize_column_names(df_insights)
-    print(f"Normalized columns: {list(df_insights.columns)}")
+    logger.debug(f"Normalized columns: {list(df_insights.columns)}")
 
     # Ensure required columns exist
     required_cols = ['insight_id', 'description']
@@ -208,7 +224,7 @@ def load_csv_data():
             df_insights[col] = ''
 
     df_insights.to_sql('insights', conn, if_exists='replace', index=False)
-    print(f"Loaded {len(df_insights)} insights")
+    logger.info(f"Loaded {len(df_insights)} insights")
 
     # Load taxonomy SI
     try:
@@ -216,12 +232,12 @@ def load_csv_data():
     except UnicodeDecodeError:
         df_si = pd.read_csv(config.TAXONOMY_SI_CSV, encoding='latin-1')
     except FileNotFoundError:
-        print("Warning: taxonomy_si.csv not found, skipping")
+        logger.warning("taxonomy_si.csv not found, skipping")
         df_si = pd.DataFrame(columns=['si_id', 'si_name', 'si_description'])
 
     df_si = normalize_column_names(df_si)
     df_si.to_sql('taxonomy_si', conn, if_exists='replace', index=False)
-    print(f"Loaded {len(df_si)} Strategic Imperatives")
+    logger.info(f"Loaded {len(df_si)} Strategic Imperatives")
 
     # Load taxonomy CSF
     try:
@@ -229,12 +245,12 @@ def load_csv_data():
     except UnicodeDecodeError:
         df_csf = pd.read_csv(config.TAXONOMY_CSF_CSV, encoding='latin-1')
     except FileNotFoundError:
-        print("Warning: taxonomy_csf.csv not found, skipping")
+        logger.warning("taxonomy_csf.csv not found, skipping")
         df_csf = pd.DataFrame(columns=['csf_id', 'therapeutic_area', 'csf_name', 'parent_si_id', 'parent_si_name'])
 
     df_csf = normalize_column_names(df_csf)
     df_csf.to_sql('taxonomy_csf', conn, if_exists='replace', index=False)
-    print(f"Loaded {len(df_csf)} Critical Success Factors")
+    logger.info(f"Loaded {len(df_csf)} Critical Success Factors")
 
     conn.close()
 
@@ -247,7 +263,7 @@ def get_all_insights():
         df = pd.read_sql_query("SELECT * FROM insights", conn)
         return df
     except Exception as e:
-        print(f"Error getting all insights: {e}")
+        logger.error(f"Error getting all insights: {e}")
         return pd.DataFrame()
     finally:
         if conn:
@@ -266,7 +282,7 @@ def get_insight_by_id(insight_id: str):
         )
         return df.iloc[0] if len(df) > 0 else None
     except Exception as e:
-        print(f"Error getting insight {insight_id}: {e}")
+        logger.error(f"Error getting insight {insight_id}: {e}")
         return None
     finally:
         if conn:
@@ -356,9 +372,9 @@ def save_insight_tags(insight_id: str, tags: dict):
             ))
 
         conn.commit()
-        print(f"Saved tags for {insight_id}")
+        logger.debug(f"Saved tags for {insight_id}")
     except Exception as e:
-        print(f"Error saving tags for {insight_id}: {e}")
+        logger.error(f"Error saving tags for {insight_id}: {e}")
         raise
     finally:
         if conn:
@@ -395,7 +411,7 @@ def get_insight_tags(insight_id: str = None):
 
         return df
     except Exception as e:
-        print(f"Error getting tags: {e}")
+        logger.error(f"Error getting tags: {e}")
         import traceback
         traceback.print_exc()
         return pd.DataFrame()
@@ -416,9 +432,9 @@ def verify_tag(insight_id: str, verified_by: str):
             WHERE insight_id = ?
         """, (verified_by, insight_id))
         conn.commit()
-        print(f"Verified tag for {insight_id} by {verified_by}")
+        logger.debug(f"Verified tag for {insight_id} by {verified_by}")
     except Exception as e:
-        print(f"Error verifying tag {insight_id}: {e}")
+        logger.error(f"Error verifying tag {insight_id}: {e}")
         raise
     finally:
         if conn:
@@ -605,6 +621,67 @@ def get_label_distribution():
 
     conn.close()
     return distributions
+
+
+# ============ USER AUTHENTICATION ============
+
+def register_user(name: str, email: str, password: str, role: str, is_evaluator: bool = False):
+    """Register a new user."""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO users (name, email, password, role, is_evaluator)
+            VALUES (?, ?, ?, ?, ?)
+        """, (name, email, password, role, 1 if is_evaluator else 0))
+        conn.commit()
+        return {'success': True, 'user_id': cursor.lastrowid}
+    except sqlite3.IntegrityError:
+        return {'success': False, 'error': 'Email already exists'}
+    finally:
+        if conn:
+            conn.close()
+
+
+def login_user(email: str, password: str):
+    """Authenticate user and return user data."""
+    conn = None
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            "SELECT id, name, email, role, is_evaluator FROM users WHERE email = ? AND password = ?",
+            conn,
+            params=(email, password)
+        )
+        if df.empty:
+            return {'success': False, 'error': 'Invalid email or password'}
+        user = df.iloc[0].to_dict()
+        user['is_evaluator'] = bool(user['is_evaluator'])
+        return {'success': True, 'user': user}
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_user_by_id(user_id: int):
+    """Get user by ID."""
+    conn = None
+    try:
+        conn = get_connection()
+        df = pd.read_sql_query(
+            "SELECT id, name, email, role, is_evaluator FROM users WHERE id = ?",
+            conn,
+            params=(user_id,)
+        )
+        if df.empty:
+            return None
+        user = df.iloc[0].to_dict()
+        user['is_evaluator'] = bool(user['is_evaluator'])
+        return user
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":

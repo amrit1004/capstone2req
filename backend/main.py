@@ -18,44 +18,47 @@ PROJECT_ROOT = Path(__file__).parent.parent
 os.chdir(PROJECT_ROOT)
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from utils.logger import setup_logging, get_logger
+
+# Initialize logging
+setup_logging("INFO")
+logger = get_logger(__name__)
+
 import database
 import taxonomy_tagger
 import persona_generator
 import vector_store
+import rag_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     try:
-        print("=" * 50)
-        print("STARTING MEDICAL INSIGHTS ENGINE")
-        print("=" * 50)
-        print(f"Working directory: {os.getcwd()}")
-        print(f"Insights CSV path: {os.path.abspath('data/insights_data.csv')}")
-        print(f"CSV exists: {os.path.exists('data/insights_data.csv')}")
-        print("-" * 50)
+        logger.info("=" * 50)
+        logger.info("STARTING MEDICAL INSIGHTS ENGINE")
+        logger.info("=" * 50)
+        logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"CSV exists: {os.path.exists('data/insights_data.csv')}")
 
-        print("Initializing database...")
+        logger.info("Initializing database...")
         database.init_database()
 
-        print("Loading CSV data...")
+        logger.info("Loading CSV data...")
         database.load_csv_data()
 
         # Verify data loaded
         insights_df = database.get_all_insights()
-        print(f"Insights loaded: {len(insights_df)}")
+        logger.info(f"Insights loaded: {len(insights_df)}")
 
-        print("=" * 50)
-        print("DATABASE READY!")
-        print("=" * 50)
+        logger.info("=" * 50)
+        logger.info("DATABASE READY!")
+        logger.info("=" * 50)
     except Exception as e:
-        print(f"ERROR during startup: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"ERROR during startup: {e}", exc_info=True)
     yield
     # Shutdown
-    pass
+    logger.info("Shutting down...")
 
 
 app = FastAPI(title="Medical Insights Engine API", version="1.0.0", lifespan=lifespan)
@@ -88,8 +91,47 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
 
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str
+    is_evaluator: bool = False
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 
 # API Routes
+
+# ============ AUTHENTICATION ============
+
+@app.post("/api/auth/register")
+async def register(request: RegisterRequest):
+    """Register a new user."""
+    if request.role not in ['clinician', 'medical_scientist', 'commercial', 'admin']:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    result = database.register_user(
+        name=request.name,
+        email=request.email,
+        password=request.password,
+        role=request.role,
+        is_evaluator=request.is_evaluator
+    )
+    if not result['success']:
+        raise HTTPException(status_code=400, detail=result['error'])
+    return result
+
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest):
+    """Login user."""
+    result = database.login_user(request.email, request.password)
+    if not result['success']:
+        raise HTTPException(status_code=401, detail=result['error'])
+    return result
+
 
 @app.get("/api/health")
 async def health_check():
@@ -477,6 +519,84 @@ async def get_sample_ground_truth():
             return {"sample": df.to_dict('records')}
         return {"sample": []}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ RAG (Retrieval Augmented Generation) ============
+
+class RAGQueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+class RAGTopicRequest(BaseModel):
+    topic: str
+    top_k: int = 10
+
+class RAGCompareRequest(BaseModel):
+    insight_id: str
+    top_k: int = 5
+
+
+@app.post("/api/rag/query")
+async def rag_query(request: RAGQueryRequest):
+    """
+    RAG Query: Ask questions about insights using retrieval-augmented generation.
+    Retrieves relevant insights and uses them as context for LLM response.
+    """
+    try:
+        store = vector_store.get_vector_store()
+        if store.get_index_size() == 0:
+            raise HTTPException(status_code=400, detail="Vector index is empty. Build index first with /api/search/build-index")
+
+        result = rag_service.rag_query(request.query, request.top_k)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/rag/summarize-topic")
+async def rag_summarize_topic(request: RAGTopicRequest):
+    """
+    RAG Topic Summary: Analyze and summarize insights about a specific topic.
+    Uses RAG to find relevant insights and generate structured analysis.
+    """
+    try:
+        store = vector_store.get_vector_store()
+        if store.get_index_size() == 0:
+            raise HTTPException(status_code=400, detail="Vector index is empty. Build index first.")
+
+        result = rag_service.rag_summarize_topic(request.topic, request.top_k)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/rag/compare")
+async def rag_compare_insights(request: RAGCompareRequest):
+    """
+    RAG Compare: Find similar insights and analyze patterns.
+    Uses RAG to retrieve similar insights and generate comparison analysis.
+    """
+    try:
+        store = vector_store.get_vector_store()
+        if store.get_index_size() == 0:
+            raise HTTPException(status_code=400, detail="Vector index is empty. Build index first.")
+
+        result = rag_service.rag_compare_insights(request.insight_id, request.top_k)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

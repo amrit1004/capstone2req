@@ -1,12 +1,17 @@
 """
 Persona-specific Summary Generator for Medical Insights Engine
 OPTIMIZED: Generates all 3 personas in ONE API call + parallel processing
+RAG-ENHANCED: Retrieves similar persona summaries as examples for consistency
 """
 import json
 import database
 import config
+import vector_store
 from openai import AzureOpenAI
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_client():
@@ -20,6 +25,66 @@ def get_client():
 
 import time
 
+def retrieve_similar_persona_examples(insight_text: str, top_k: int = 2) -> str:
+    """
+    RAG: Retrieve similar insights with persona summaries as examples.
+    """
+    try:
+        store = vector_store.get_vector_store()
+        if store.get_index_size() == 0:
+            return ""
+
+        search_results = store.search(insight_text, top_k + 3)
+
+        examples = []
+        for result in search_results:
+            if len(examples) >= top_k:
+                break
+
+            insight_id = result['insight_id']
+
+            # Get persona summaries for this insight
+            summaries_df = database.get_persona_summaries(insight_id)
+            if summaries_df.empty:
+                continue
+
+            # Get insight
+            insight = database.get_insight_by_id(insight_id)
+            if insight is None:
+                continue
+
+            # Format summaries
+            persona_texts = {}
+            for _, row in summaries_df.iterrows():
+                persona_texts[row['persona_type']] = row['summary']
+
+            if len(persona_texts) >= 3:
+                examples.append({
+                    'description': insight.get('description', '')[:200],
+                    'clinician': persona_texts.get('clinician', ''),
+                    'medical_scientist': persona_texts.get('medical_scientist', ''),
+                    'commercial': persona_texts.get('commercial', '')
+                })
+
+        if not examples:
+            return ""
+
+        example_text = "\n\nSIMILAR INSIGHTS WITH PERSONA SUMMARIES (use as reference for style):\n"
+        for i, ex in enumerate(examples, 1):
+            example_text += f"""
+Example {i}:
+Insight: {ex['description']}...
+- Clinician summary: {ex['clinician'][:150]}...
+- Medical Scientist summary: {ex['medical_scientist'][:150]}...
+- Commercial summary: {ex['commercial'][:150]}...
+"""
+        return example_text
+
+    except Exception as e:
+        logger.error(f"RAG retrieval error: {e}")
+        return ""
+
+
 def retry_on_error(func, max_retries=3, delay=2):
     """Retry function with exponential backoff."""
     for attempt in range(max_retries):
@@ -28,12 +93,12 @@ def retry_on_error(func, max_retries=3, delay=2):
         except Exception as e:
             if attempt == max_retries - 1:
                 raise e
-            print(f"Retry {attempt + 1}/{max_retries} after error: {e}")
+            logger.warning(f"Retry {attempt + 1}/{max_retries} after error: {e}")
             time.sleep(delay * (attempt + 1))
 
 
-def generate_all_personas_single_call(insight_text: str, tags: dict = None) -> dict:
-    """Generate all 3 persona summaries in ONE API call."""
+def generate_all_personas_single_call(insight_text: str, tags: dict = None, rag_context: str = "") -> dict:
+    """Generate all 3 persona summaries in ONE API call. RAG-enhanced with examples."""
     client = get_client()
 
     tag_context = ""
@@ -47,6 +112,7 @@ Context:
 """
 
     prompt = f"""Generate 3 different summaries of this medical insight, each tailored for a specific audience.
+{rag_context}
 
 INSIGHT:
 {insight_text}
@@ -67,6 +133,8 @@ Respond in JSON format:
 
 Each summary should emphasize aspects most relevant to that audience. Use appropriate terminology."""
 
+    llm_settings = config.get_llm_settings("personas")
+
     def make_request():
         return client.chat.completions.create(
             model=config.AZURE_OPENAI_DEPLOYMENT,
@@ -74,8 +142,8 @@ Each summary should emphasize aspects most relevant to that audience. Use approp
                 {"role": "system", "content": "You are a medical communications expert. Respond with valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_completion_tokens=600
+            temperature=llm_settings["temperature"],
+            max_completion_tokens=llm_settings["max_tokens"]
         )
 
     response = retry_on_error(make_request)
@@ -97,20 +165,33 @@ Each summary should emphasize aspects most relevant to that audience. Use approp
     }
 
 
-def generate_summaries_for_insight(insight_id: str) -> dict:
-    """Generate all three persona summaries for an insight (single API call)."""
+def generate_summaries_for_insight(insight_id: str, use_rag: bool = True) -> dict:
+    """
+    Generate all three persona summaries for an insight (single API call).
+    RAG-Enhanced: Retrieves similar persona summaries as examples for consistency.
+    """
     insight = database.get_insight_by_id(insight_id)
     if insight is None:
         return {"error": "Insight not found"}
+
+    insight_text = str(insight.get('description', ''))
 
     # Get tags for context
     tags_df = database.get_insight_tags(insight_id)
     tags = tags_df.iloc[0].to_dict() if not tags_df.empty else None
 
+    # RAG: Retrieve similar persona examples
+    rag_context = ""
+    if use_rag:
+        rag_context = retrieve_similar_persona_examples(insight_text, top_k=2)
+        if rag_context:
+            logger.debug(f"RAG: Found persona examples for {insight_id}")
+
     # Generate all 3 in one call
     all_summaries = generate_all_personas_single_call(
-        insight_text=str(insight.get('description', '')),
-        tags=tags
+        insight_text=insight_text,
+        tags=tags,
+        rag_context=rag_context
     )
 
     summaries = {}
@@ -156,7 +237,7 @@ def generate_all_summaries(progress_callback=None, max_workers=10, limit=None, s
         summaries_df = database.get_persona_summaries()
         generated_ids = set(summaries_df['insight_id'].tolist()) if not summaries_df.empty else set()
         insights_df = insights_df[~insights_df['insight_id'].isin(generated_ids)]
-        print(f"Skipping {len(generated_ids)} already generated insights")
+        logger.info(f"Skipping {len(generated_ids)} already generated insights")
 
     # Apply limit if specified
     if limit and limit > 0:
@@ -172,7 +253,7 @@ def generate_all_summaries(progress_callback=None, max_workers=10, limit=None, s
     }
 
     completed = 0
-    print(f"Starting parallel persona generation with {max_workers} workers...")
+    logger.info(f"Starting persona generation with {max_workers} workers")
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_id = {executor.submit(_generate_worker, iid): iid for iid in insight_ids}
@@ -183,10 +264,10 @@ def generate_all_summaries(progress_callback=None, max_workers=10, limit=None, s
 
             if result['status'] == 'success':
                 results['success'] += 1
-                print(f"Generated {completed}/{total}: {result['insight_id']} - SUCCESS")
+                logger.info(f"Generated {completed}/{total}: {result['insight_id']} - SUCCESS")
             else:
                 results['failed'] += 1
-                print(f"Generated {completed}/{total}: {result['insight_id']} - FAILED: {result.get('error')}")
+                logger.warning(f"Generated {completed}/{total}: {result['insight_id']} - FAILED: {result.get('error')}")
 
             if progress_callback:
                 progress_callback(completed, total)

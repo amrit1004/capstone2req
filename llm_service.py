@@ -5,6 +5,9 @@ import json
 import time
 from openai import AzureOpenAI
 import config
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def retry_on_error(func, max_retries=3, delay=2):
@@ -15,7 +18,7 @@ def retry_on_error(func, max_retries=3, delay=2):
         except Exception as e:
             if attempt == max_retries - 1:
                 raise e
-            print(f"Retry {attempt + 1}/{max_retries} after error: {e}")
+            logger.warning(f"Retry {attempt + 1}/{max_retries} after error: {e}")
             time.sleep(delay * (attempt + 1))
 
 
@@ -49,18 +52,22 @@ def get_embeddings_batch(texts: list) -> list:
 
 
 def classify_insight(insight_text: str, therapeutic_area: str,
-                     taxonomy_si: list, taxonomy_csf: list) -> dict:
+                     taxonomy_si: list, taxonomy_csf: list,
+                     rag_context: str = "") -> dict:
     """
     Classify an insight and extract all 10 labels.
+    RAG-Enhanced: Uses similar tagged insights as examples for consistency.
     Returns comprehensive tags including SI, CSF, sentiment, etc.
     """
     client = get_client()
+    llm_settings = config.get_llm_settings("tagging")
 
     # Format taxonomy for prompt
     si_list = "\n".join([f"- {t['si_id']}: {t['si_name']}" for t in taxonomy_si])
     csf_list = "\n".join([f"- {t['csf_id']}: {t['csf_name']} (under {t['parent_si_id']})" for t in taxonomy_csf])
 
     prompt = f"""You are a medical insights analysis expert. Analyze the following medical insight and extract all relevant labels.
+{rag_context}
 
 INSIGHT TEXT:
 "{insight_text}"
@@ -109,8 +116,8 @@ Respond ONLY with valid JSON, no other text."""
                 {"role": "system", "content": "You are a medical insights classification expert. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
-            max_completion_tokens=800
+            temperature=llm_settings["temperature"],
+            max_completion_tokens=llm_settings["max_tokens"]
         )
 
     response = retry_on_error(make_request)
@@ -147,6 +154,7 @@ def generate_persona_summary(insight_text: str, persona_type: str,
     Generate a persona-specific summary of the insight.
     """
     client = get_client()
+    llm_settings = config.get_llm_settings("personas")
 
     tag_context = ""
     if tags:
@@ -181,8 +189,8 @@ Summary:"""
                 {"role": "system", "content": f"You are a medical communications expert writing for {persona_info['name']}s."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_completion_tokens=300
+            temperature=llm_settings["temperature"],
+            max_completion_tokens=llm_settings["max_tokens"]
         )
 
     response = retry_on_error(make_request)

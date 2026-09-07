@@ -8,9 +8,14 @@ A modern web application using **React + FastAPI** for AI-powered medical insigh
 
 - **10-Label Extraction**: AI extracts 10 structured labels from unstructured medical insights
 - **Taxonomy Tagging**: Classification against Strategic Imperatives & Critical Success Factors
-- **Semantic Search**: Natural language search using ChromaDB vector embeddings
+- **RAG (Retrieval-Augmented Generation)**: Intelligent Q&A and analysis grounded in actual insight data
+- **Human-in-the-Loop Learning**: System learns from human corrections to improve accuracy
+- **Semantic Search**: Natural language search using TF-IDF vector embeddings
 - **Human Review**: Verify and correct AI-generated labels with accuracy tracking
 - **Persona Summaries**: Generate audience-specific summaries (Clinician, Medical Scientist, Commercial)
+- **Role-Based Access**: Login with roles (Clinician, Medical Scientist, Commercial, Admin)
+- **Evaluator Mode**: Designated evaluators can approve/correct tags
+- **Ground Truth Comparison**: Compare AI predictions against expert-labeled data
 - **Dark/Light Mode**: Modern React UI with theme switching
 - **Real-time Metrics**: Track AI accuracy and precision
 
@@ -45,6 +50,195 @@ The system extracts **10 labels** from each medical insight using Azure OpenAI:
 
 ---
 
+---
+
+## RAG (Retrieval-Augmented Generation)
+
+RAG enhances LLM responses by retrieving relevant context from your indexed insights before generating answers. This grounds AI responses in actual data and improves accuracy.
+
+### How RAG Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        RAG PIPELINE                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  User Query              Vector Search             LLM Generation
+  ──────────              ─────────────             ──────────────
+                                         
+  "What are the main     ────► TF-IDF Index        
+   efficacy concerns?"         finds top-k                
+                               similar insights            
+                                    │                       
+                                    ▼                       
+                          ┌──────────────────┐              
+                          │ Retrieved        │              
+                          │ Insights (1-10)  │              
+                          └────────┬─────────┘              
+                                   │                        
+                                   ▼                        
+                          ┌──────────────────┐      ┌─────────────┐
+                          │  Azure OpenAI    │ ───► │  Grounded   │
+                          │  + Context       │      │  Response   │
+                          └──────────────────┘      └─────────────┘
+```
+
+### RAG Features
+
+| Feature | Description |
+|---------|-------------|
+| **Ask Questions** | Natural language Q&A grounded in actual insight data |
+| **Topic Analysis** | Analyze trends and patterns across similar insights |
+| **Compare Insights** | Find similar insights and analyze relationships |
+
+### RAG Use Cases
+
+1. **Intelligent Q&A**: "What are KOLs saying about drug efficacy in oncology?"
+2. **Trend Analysis**: Summarize all insights about "patient access barriers"
+3. **Pattern Discovery**: Find similar insights and identify common themes
+4. **Evidence-Based Summaries**: Generate reports grounded in real data
+
+### RAG-Enhanced Tagging & Personas
+
+RAG is integrated into the core tagging and persona generation workflows:
+
+**Tagging with RAG:**
+```
+New Insight → Find similar TAGGED insights → 
+              Include as examples in prompt → 
+              LLM generates consistent tags
+```
+
+**Persona Generation with RAG:**
+```
+New Insight → Find similar PERSONA summaries → 
+              Include as style examples → 
+              LLM generates consistent summaries
+```
+
+This ensures consistency across similar insights and reduces classification errors.
+
+### RAG API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/rag/query` | POST | Ask questions with context retrieval |
+| `/api/rag/summarize-topic` | POST | Analyze and summarize a topic |
+| `/api/rag/compare` | POST | Find and compare similar insights |
+
+---
+
+## Human-in-the-Loop (HITL) Learning
+
+The system learns from human corrections to improve future predictions. When evaluators correct AI-generated tags, these corrections are stored and used as learning examples.
+
+### How HITL Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    HUMAN-IN-THE-LOOP LEARNING CYCLE                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+PHASE 1: Initial Tagging
+─────────────────────────
+    New Insight                    LLM (Azure OpenAI)
+    ───────────                    ─────────────────
+    "KOL concerned about     →     Generates 10 labels:
+     patient access to            - topic: Efficacy ❌ (wrong)
+     drug in rural areas"         - sentiment: Negative ✓
+                                  
+PHASE 2: Human Review & Correction
+──────────────────────────────────
+    Evaluator reviews          →   Saves to tag_corrections table:
+    "This is about Access,         ┌─────────────────────────────────┐
+     not Efficacy"                 │ field: topic                    │
+                                   │ original: Efficacy              │
+                                   │ corrected: Access               │
+                                   │ reason: "Rural access = Access" │
+                                   └─────────────────────────────────┘
+
+PHASE 3: Learning from Corrections
+──────────────────────────────────
+    Next similar insight           System retrieves:
+    ────────────────────           ─────────────────
+    "HCP frustrated with      →    1. Similar tagged insights (RAG)
+     medication availability       2. Relevant CORRECTIONS (HITL)
+     in remote regions"           
+                                        ↓
+                                   
+    LLM Prompt includes:
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ CORRECTION EXAMPLES (learn from human feedback):                 │
+    │ - Insight: "KOL concerned about patient access..."              │
+    │   AI predicted: topic=Efficacy ❌                                │
+    │   Human corrected: topic=Access ✓                               │
+    │   Reason: "Rural/remote access = Access topic"                   │
+    │                                                                  │
+    │ APPLY THESE LEARNINGS to avoid similar mistakes.                 │
+    └──────────────────────────────────────────────────────────────────┘
+                                        ↓
+                                        
+    LLM Output (improved):
+    - topic: Access ✓  (learned from correction!)
+```
+
+### HITL Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Continuous Improvement** | Model gets better over time without fine-tuning |
+| **Domain Adaptation** | Learns organization-specific terminology |
+| **Error Reduction** | Same mistakes are not repeated |
+| **Transparent Learning** | Corrections explain WHY to change |
+
+### HITL Data Flow
+
+```
+                    ┌─────────────┐
+                    │  New Insight │
+                    └──────┬──────┘
+                           │
+                           ▼
+            ┌──────────────────────────────┐
+            │     RETRIEVAL LAYER          │
+            │                              │
+            │  1. Similar tagged insights  │
+            │  2. Relevant corrections     │◄── Human feedback
+            └──────────────┬───────────────┘
+                           │
+                           ▼
+            ┌──────────────────────────────┐
+            │      CONTEXT BUILDING        │
+            │                              │
+            │  Examples + Corrections +    │
+            │  "Avoid these mistakes"      │
+            └──────────────┬───────────────┘
+                           │
+                           ▼
+            ┌──────────────────────────────┐
+            │     AZURE OPENAI (LLM)       │
+            │                              │
+            │  Generates tags with         │
+            │  learned corrections         │
+            └──────────────┬───────────────┘
+                           │
+                           ▼
+            ┌──────────────────────────────┐
+            │   IMPROVED PREDICTIONS       │
+            │  (Accuracy increases)        │
+            └──────────────────────────────┘
+```
+
+### Evaluator Workflow
+
+1. **Login** as Evaluator (checkbox during signup)
+2. **Review** AI-generated tags on Review page
+3. **Correct** mistakes with explanation
+4. **System learns** from corrections automatically
+5. **Future tags** benefit from your feedback
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -52,8 +246,8 @@ The system extracts **10 labels** from each medical insight using Azure OpenAI:
 | Frontend | React 18 + Vite + Tailwind CSS |
 | Backend | FastAPI + Python |
 | Database | SQLite |
-| Vector Store | ChromaDB |
-| LLM | Azure OpenAI (GPT-4 + text-embedding-ada-002) |
+| Vector Store | TF-IDF (scikit-learn) |
+| LLM | Azure OpenAI (GPT-4o-mini) |
 | Charts | Recharts |
 | Icons | Lucide React |
 
@@ -74,6 +268,7 @@ capstone2req/
 │   │   │   ├── Review.jsx
 │   │   │   ├── Search.jsx
 │   │   │   ├── Personas.jsx
+│   │   │   ├── RAG.jsx
 │   │   │   └── Metrics.jsx
 │   │   ├── api.js             # API client
 │   │   ├── App.jsx            # Main app with routing
@@ -96,6 +291,7 @@ capstone2req/
 ├── vector_store.py            # ChromaDB vector store
 ├── taxonomy_tagger.py         # 10-label extraction logic
 ├── persona_generator.py       # Persona summary generation
+├── rag_service.py             # RAG (Retrieval-Augmented Generation)
 ├── requirements.txt           # Python dependencies
 ├── .env                       # Environment variables
 └── .env.example               # Example environment file
@@ -232,8 +428,13 @@ Frontend runs at: http://localhost:5173
 | `/api/metrics` | GET | Get accuracy metrics |
 | `/api/distributions` | GET | Get label distributions |
 | `/api/search` | POST | Semantic search |
-| `/api/search/build-index` | POST | Build ChromaDB index |
+| `/api/search/build-index` | POST | Build vector index |
 | `/api/personas/{id}` | GET | Get persona summaries |
+| `/api/rag/query` | POST | RAG: Ask questions with context |
+| `/api/rag/summarize-topic` | POST | RAG: Analyze and summarize topic |
+| `/api/rag/compare` | POST | RAG: Compare similar insights |
+| `/api/ground-truth/export-template` | GET | Export CSV template for labeling |
+| `/api/ground-truth/compare` | POST | Compare AI vs ground truth |
 
 ---
 
@@ -246,7 +447,8 @@ Frontend runs at: http://localhost:5173
 | **Review & Correct** | Verify labels, make corrections with reasons |
 | **Search** | Semantic search using natural language |
 | **Personas** | Generate Clinician/Scientist/Commercial summaries |
-| **Metrics** | Track AI accuracy, view correction history |
+| **RAG Assistant** | Ask questions, analyze topics, compare insights using RAG |
+| **Metrics** | Track AI accuracy, ground truth comparison, correction history |
 
 ---
 
@@ -291,10 +493,13 @@ Frontend runs at: http://localhost:5173
 - [x] 10-label AI extraction from insights
 - [x] Taxonomy tagging (SI + CSF)
 - [x] Accuracy/precision metrics with formula
-- [x] Searchable ChromaDB vector store
+- [x] Searchable TF-IDF vector store
 - [x] Human review/correction workflow
 - [x] Three persona-specific summaries
 - [x] Label distribution analytics
+- [x] RAG (Retrieval-Augmented Generation)
+- [x] Ground truth comparison for accuracy measurement
+- [x] Incremental batch processing (skip already tagged)
 
 ---
 

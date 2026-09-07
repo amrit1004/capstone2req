@@ -24,6 +24,37 @@ INSIGHTS_CSV = "data/insights_data.csv"
 TAXONOMY_SI_CSV = "data/taxonomy_si.csv"
 TAXONOMY_CSF_CSV = "data/taxonomy_csf.csv"
 
+# LLM Settings per Use Case
+# Temperature: 0 = deterministic, 1 = creative
+# Tokens: max output length
+LLM_PRESETS = {
+    "tagging": {
+        "temperature": 0.2,       # Low: consistent, deterministic labels
+        "max_tokens": 800,
+        "description": "Taxonomy tagging - needs consistency"
+    },
+    "personas": {
+        "temperature": 0.6,       # Medium: creative but coherent
+        "max_tokens": 600,
+        "description": "Persona summaries - needs natural language"
+    },
+    "rag_query": {
+        "temperature": 0.5,       # Balanced: informative responses
+        "max_tokens": 1000,
+        "description": "RAG Q&A - needs comprehensive answers"
+    },
+    "rag_summary": {
+        "temperature": 0.4,       # Lower: factual summaries
+        "max_tokens": 1200,
+        "description": "RAG topic summary - needs structured output"
+    }
+}
+
+def get_llm_settings(use_case: str) -> dict:
+    """Get LLM settings for a specific use case."""
+    return LLM_PRESETS.get(use_case, LLM_PRESETS["tagging"])
+
+
 # Persona Definitions
 PERSONAS = {
     "clinician": {
