@@ -62,7 +62,7 @@ function Login() {
           <p className="text-slate-400 mt-1">AI-Driven Analysis Engine</p>
         </div>
 
-        <Card className="bg-slate-800/50 backdrop-blur border-slate-700">
+        <Card className="!bg-slate-800 backdrop-blur border-slate-700">
           {/* Tabs */}
           <div className="flex mb-6 bg-slate-700/50 rounded-xl p-1">
             <button
@@ -100,7 +100,7 @@ function Login() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required={!isLogin}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-700/50 text-white focus:ring-2 focus:ring-primary-500 outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-700 text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 outline-none"
                   placeholder="Enter your name"
                 />
               </div>
@@ -113,7 +113,7 @@ function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-700/50 text-white focus:ring-2 focus:ring-primary-500 outline-none"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-700 text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 outline-none"
                 placeholder="you@example.com"
               />
             </div>
@@ -125,7 +125,7 @@ function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-700/50 text-white focus:ring-2 focus:ring-primary-500 outline-none"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-700 text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 outline-none"
                 placeholder="Enter password"
               />
             </div>

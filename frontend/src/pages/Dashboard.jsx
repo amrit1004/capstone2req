@@ -108,12 +108,6 @@ function Dashboard() {
                     color: 'white'
                   }}
                 />
-                <Legend
-                  layout="horizontal"
-                  verticalAlign="bottom"
-                  align="center"
-                  wrapperStyle={{ paddingTop: '20px' }}
-                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -146,7 +140,6 @@ function Dashboard() {
                     color: 'white'
                   }}
                 />
-                <Legend />
                 <Bar dataKey="count" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} name="Insights Count" />
               </BarChart>
             </ResponsiveContainer>

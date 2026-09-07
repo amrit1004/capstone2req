@@ -254,7 +254,10 @@ function Metrics() {
                         'Accuracy'
                       ]}
                     />
-                    <Legend />
+                    <Legend
+                      wrapperStyle={{ paddingTop: '10px' }}
+                      formatter={(value) => <span className="text-slate-600 dark:text-slate-300 text-sm">{value}</span>}
+                    />
                     <Bar
                       dataKey="Accuracy"
                       fill="url(#accuracyGradient)"
