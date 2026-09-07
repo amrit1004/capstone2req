@@ -1,16 +1,87 @@
-import { useState, useEffect } from 'react'
-import { MessageSquare, Search, GitCompare, FileText, Send, Loader2, BookOpen } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { MessageSquare, Search, GitCompare, FileText, Send, BookOpen, Bot, User, Copy, Check, RefreshCw, Sparkles } from 'lucide-react'
 import { Card, Badge, Button } from '../components/Card'
 import { getInsights, ragQuery, ragSummarizeTopic, ragCompare } from '../api'
+
+// Simple markdown renderer
+const renderMarkdown = (text) => {
+  if (!text) return null
+
+  // Split into lines for processing
+  const lines = text.split('\n')
+  const elements = []
+  let listItems = []
+  let inList = false
+
+  const processInlineMarkdown = (line) => {
+    // Bold + Italic (***text***)
+    line = line.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    // Bold (**text**)
+    line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Italic (*text*)
+    line = line.replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Code (`text`)
+    line = line.replace(/`(.+?)`/g, '<code class="px-1 py-0.5 bg-slate-200 dark:bg-slate-600 rounded text-sm">$1</code>')
+    return line
+  }
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim()
+
+    // Headers
+    if (trimmed.startsWith('### ')) {
+      if (inList) { elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>); listItems = []; inList = false }
+      elements.push(<h4 key={idx} className="font-semibold text-slate-800 dark:text-slate-200 mt-4 mb-2">{trimmed.slice(4)}</h4>)
+    } else if (trimmed.startsWith('## ')) {
+      if (inList) { elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>); listItems = []; inList = false }
+      elements.push(<h3 key={idx} className="font-bold text-slate-900 dark:text-white mt-4 mb-2">{trimmed.slice(3)}</h3>)
+    } else if (trimmed.startsWith('# ')) {
+      if (inList) { elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>); listItems = []; inList = false }
+      elements.push(<h2 key={idx} className="font-bold text-lg text-slate-900 dark:text-white mt-4 mb-2">{trimmed.slice(2)}</h2>)
+    }
+    // Numbered list
+    else if (/^\d+\.\s/.test(trimmed)) {
+      if (inList && listItems.length > 0) { elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>); listItems = [] }
+      inList = true
+      const content = trimmed.replace(/^\d+\.\s/, '')
+      listItems.push(<li key={idx} className="text-slate-700 dark:text-slate-300" dangerouslySetInnerHTML={{ __html: processInlineMarkdown(content) }} />)
+    }
+    // Bullet list
+    else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      inList = true
+      const content = trimmed.slice(2)
+      listItems.push(<li key={idx} className="text-slate-700 dark:text-slate-300" dangerouslySetInnerHTML={{ __html: processInlineMarkdown(content) }} />)
+    }
+    // Empty line
+    else if (trimmed === '') {
+      if (inList) { elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>); listItems = []; inList = false }
+      elements.push(<div key={idx} className="h-2" />)
+    }
+    // Regular paragraph
+    else {
+      if (inList) { elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>); listItems = []; inList = false }
+      elements.push(<p key={idx} className="text-slate-700 dark:text-slate-300 mb-2" dangerouslySetInnerHTML={{ __html: processInlineMarkdown(trimmed) }} />)
+    }
+  })
+
+  // Close any remaining list
+  if (inList && listItems.length > 0) {
+    elements.push(<ul key="list-final" className="list-disc list-inside mb-3 space-y-1">{listItems}</ul>)
+  }
+
+  return <div className="space-y-1">{elements}</div>
+}
 
 function RAG() {
   const [activeTab, setActiveTab] = useState('query')
   const [insights, setInsights] = useState([])
 
-  // Query state
+  // Chat state
+  const [messages, setMessages] = useState([])
   const [query, setQuery] = useState('')
-  const [queryResult, setQueryResult] = useState(null)
   const [queryLoading, setQueryLoading] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState(null)
+  const chatEndRef = useRef(null)
 
   // Topic state
   const [topic, setTopic] = useState('')
@@ -26,6 +97,10 @@ function RAG() {
     fetchInsights()
   }, [])
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
   const fetchInsights = async () => {
     try {
       const res = await getInsights()
@@ -40,17 +115,47 @@ function RAG() {
 
   const handleQuery = async () => {
     if (!query.trim()) return
+
+    const userMessage = { role: 'user', content: query, timestamp: new Date() }
+    setMessages(prev => [...prev, userMessage])
+    setQuery('')
     setQueryLoading(true)
-    setQueryResult(null)
+
     try {
       const res = await ragQuery(query)
-      setQueryResult(res.data)
+      const botMessage = {
+        role: 'assistant',
+        content: res.data.answer,
+        sources: res.data.sources,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, botMessage])
     } catch (error) {
       console.error('Error:', error)
-      alert(error.response?.data?.detail || 'Query failed. Make sure vector index is built.')
+      const errorMessage = {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please make sure the vector index is built.',
+        isError: true,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
     } finally {
       setQueryLoading(false)
     }
+  }
+
+  const handleCopy = async (idx, text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    } catch (err) {
+      console.error('Copy failed:', err)
+    }
+  }
+
+  const handleClearChat = () => {
+    setMessages([])
   }
 
   const handleTopicSummary = async () => {
@@ -84,33 +189,24 @@ function RAG() {
   }
 
   const tabs = [
-    { id: 'query', label: 'Ask Questions', icon: MessageSquare },
+    { id: 'query', label: 'Chat', icon: MessageSquare },
     { id: 'topic', label: 'Topic Analysis', icon: FileText },
-    { id: 'compare', label: 'Compare Insights', icon: GitCompare },
+    { id: 'compare', label: 'Compare', icon: GitCompare },
+  ]
+
+  const suggestedQuestions = [
+    "What are the main efficacy concerns?",
+    "Summarize safety signals across insights",
+    "What dosing questions are most common?",
+    "What evidence gaps exist?"
   ]
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">RAG Assistant</h1>
-        <p className="text-slate-500 dark:text-slate-400">Retrieval-Augmented Generation for intelligent insight analysis</p>
+        <p className="text-slate-500 dark:text-slate-400">AI-powered insight analysis with retrieval-augmented generation</p>
       </div>
-
-      {/* Info Card */}
-      <Card className="mb-6 bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 border-primary-200 dark:border-primary-800">
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-1">How RAG Works</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              RAG (Retrieval-Augmented Generation) enhances AI responses by first retrieving relevant insights from your indexed data,
-              then using them as context for the LLM. This grounds responses in actual data and improves accuracy.
-            </p>
-          </div>
-        </div>
-      </Card>
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 pb-2">
@@ -133,58 +229,150 @@ function RAG() {
         })}
       </div>
 
-      {/* Query Tab */}
+      {/* Chat Tab */}
       {activeTab === 'query' && (
-        <div className="space-y-6">
-          <Card>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Ask a Question</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              Ask questions about your medical insights. The AI will retrieve relevant insights and answer based on actual data.
-            </p>
-            <div className="flex gap-3">
+        <div className="flex flex-col h-[calc(100vh-280px)] min-h-[500px]">
+          {/* Chat Messages */}
+          <Card className="flex-1 overflow-hidden flex flex-col mb-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center mb-4">
+                    <Bot className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Ask me anything about your insights</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-md">
+                    I'll search through your medical insights database and provide answers grounded in actual data.
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {suggestedQuestions.map((q, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setQuery(q)}
+                        className="px-3 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-primary-100 dark:hover:bg-primary-900/30 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.role === 'assistant' && (
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                          <Bot className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] ${msg.role === 'user' ? 'order-first' : ''}`}>
+                        <div className={`rounded-2xl px-4 py-3 ${
+                          msg.role === 'user'
+                            ? 'bg-primary-500 text-white rounded-br-md'
+                            : msg.isError
+                              ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-bl-md'
+                              : 'bg-slate-100 dark:bg-slate-700 rounded-bl-md'
+                        }`}>
+                          {msg.role === 'user' ? (
+                            <p>{msg.content}</p>
+                          ) : (
+                            <div>
+                              {renderMarkdown(msg.content)}
+                              {msg.sources && msg.sources.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                                    Sources ({msg.sources.length})
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {msg.sources.map((src, sIdx) => (
+                                      <Badge key={sIdx} variant="secondary" className="text-xs">
+                                        {src.insight_id}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className={`flex items-center gap-2 mt-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-xs text-slate-400">
+                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {msg.role === 'assistant' && !msg.isError && (
+                            <button
+                              onClick={() => handleCopy(idx, msg.content)}
+                              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            >
+                              {copiedIdx === idx ? (
+                                <Check className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-slate-400" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {msg.role === 'user' && (
+                        <div className="w-8 h-8 rounded-lg bg-slate-300 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
+                          <User className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {queryLoading && (
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                        <Bot className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="bg-slate-100 dark:bg-slate-700 rounded-2xl rounded-bl-md px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1">
+                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                          </div>
+                          <span className="text-sm text-slate-500">Searching insights...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </>
+              )}
+            </div>
+          </Card>
+
+          {/* Input Area */}
+          <div className="flex gap-3 items-center">
+            {messages.length > 0 && (
+              <button
+                onClick={handleClearChat}
+                className="p-3 rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                title="Clear chat"
+              >
+                <RefreshCw className="w-5 h-5 text-slate-500" />
+              </button>
+            )}
+            <div className="flex-1 relative">
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleQuery()}
-                placeholder="e.g., What are the main efficacy concerns for oncology drugs?"
-                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
+                onKeyDown={(e) => e.key === 'Enter' && !queryLoading && handleQuery()}
+                placeholder="Ask a question about your insights..."
+                disabled={queryLoading}
+                className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none disabled:opacity-50"
               />
-              <Button onClick={handleQuery} loading={queryLoading}>
+              <button
+                onClick={handleQuery}
+                disabled={queryLoading || !query.trim()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
                 <Send className="w-4 h-4" />
-                Ask
-              </Button>
+              </button>
             </div>
-          </Card>
-
-          {queryResult && (
-            <Card>
-              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Answer</h3>
-              <div className="prose dark:prose-invert max-w-none mb-6">
-                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{queryResult.answer}</p>
-              </div>
-
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-                <h4 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3">
-                  Sources ({queryResult.num_sources} insights retrieved)
-                </h4>
-                <div className="space-y-2">
-                  {queryResult.sources?.map((source, idx) => (
-                    <div key={idx} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="primary">{source.insight_id}</Badge>
-                        <span className="text-xs text-slate-400">Relevance: {(source.relevance_score * 100).toFixed(1)}%</span>
-                        {source.therapeutic_area && (
-                          <Badge variant="secondary">{source.therapeutic_area}</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-300">{source.preview}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-          )}
+          </div>
         </div>
       )}
 
@@ -194,7 +382,7 @@ function RAG() {
           <Card>
             <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Analyze a Topic</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              Enter a topic to analyze trends, patterns, and generate a structured summary from relevant insights.
+              Enter a topic to analyze trends, patterns, and generate a structured summary.
             </p>
             <div className="flex gap-3">
               <input
@@ -206,7 +394,7 @@ function RAG() {
                 className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
               />
               <Button onClick={handleTopicSummary} loading={topicLoading}>
-                <Search className="w-4 h-4" />
+                <Sparkles className="w-4 h-4" />
                 Analyze
               </Button>
             </div>
@@ -215,16 +403,17 @@ function RAG() {
           {topicResult && (
             <Card>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-slate-900 dark:text-white">Topic Analysis: {topicResult.topic}</h3>
-                <Badge variant="secondary">{topicResult.insights_analyzed} insights analyzed</Badge>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Topic: {topicResult.topic}</h3>
+                <Badge variant="secondary">{topicResult.insights_analyzed} insights</Badge>
               </div>
-              <div className="prose dark:prose-invert max-w-none">
-                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{topicResult.summary}</p>
-              </div>
+              {renderMarkdown(topicResult.summary)}
               <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-xs text-slate-400">
-                  Source IDs: {topicResult.source_ids?.join(', ')}
-                </p>
+                <p className="text-xs text-slate-400 mb-2">Sources:</p>
+                <div className="flex flex-wrap gap-1">
+                  {topicResult.source_ids?.map((id, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">{id}</Badge>
+                  ))}
+                </div>
               </div>
             </Card>
           )}
@@ -237,7 +426,7 @@ function RAG() {
           <Card>
             <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Compare Similar Insights</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              Select an insight to find similar ones and get an AI analysis of patterns and differences.
+              Select an insight to find similar ones and analyze patterns.
             </p>
             <div className="flex gap-3">
               <select
@@ -273,13 +462,11 @@ function RAG() {
                 <div className="flex flex-wrap gap-2 mb-4">
                   {compareResult.similar_insights?.map((sim, idx) => (
                     <Badge key={idx} variant="secondary">
-                      {sim.insight_id} ({(sim.similarity * 100).toFixed(1)}% similar)
+                      {sim.insight_id} ({(sim.similarity * 100).toFixed(0)}%)
                     </Badge>
                   ))}
                 </div>
-                <div className="prose dark:prose-invert max-w-none">
-                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{compareResult.analysis}</p>
-                </div>
+                {renderMarkdown(compareResult.analysis)}
               </Card>
             </div>
           )}
