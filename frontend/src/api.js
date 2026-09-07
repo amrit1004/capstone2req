@@ -7,6 +7,10 @@ const api = axios.create({
   },
 })
 
+// Auth
+export const register = (data) => api.post('/auth/register', data)
+export const login = (data) => api.post('/auth/login', data)
+
 // Insights
 export const getInsights = () => api.get('/insights')
 export const getInsight = (id) => api.get(`/insights/${id}`)
@@ -53,5 +57,10 @@ export const compareGroundTruth = (file) => {
   })
 }
 export const getSampleGroundTruth = () => api.get('/ground-truth/sample')
+
+// RAG (Retrieval Augmented Generation)
+export const ragQuery = (query, topK = 5) => api.post('/rag/query', { query, top_k: topK })
+export const ragSummarizeTopic = (topic, topK = 10) => api.post('/rag/summarize-topic', { topic, top_k: topK })
+export const ragCompare = (insightId, topK = 5) => api.post('/rag/compare', { insight_id: insightId, top_k: topK })
 
 export default api

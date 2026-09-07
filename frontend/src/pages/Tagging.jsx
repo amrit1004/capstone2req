@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Tags, Zap, Target, Brain, CheckCircle2, Package, MessageSquare, Lightbulb, Users, Radio, FileSearch, AlertCircle, RefreshCw } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Tags, Zap, Target, Brain, CheckCircle2, Package, MessageSquare, Lightbulb, Users, Radio, FileSearch, AlertCircle, RefreshCw, Search } from 'lucide-react'
 import { Card, Badge, Button } from '../components/Card'
 import { getInsights, getTags, tagSingle, tagBatch } from '../api'
 
@@ -28,6 +28,38 @@ function Tagging() {
   const [result, setResult] = useState(null)
   const [batchLimit, setBatchLimit] = useState('')  // empty = all
   const [skipTagged, setSkipTagged] = useState(true)  // skip already tagged by default
+  const [searchQuery, setSearchQuery] = useState('')
+  const [insightPage, setInsightPage] = useState(0)
+  const insightsPerPage = 20
+
+  // Sort insights by ID and filter by search query
+  const allFilteredInsights = useMemo(() => {
+    let sorted = [...insights].sort((a, b) =>
+      a.insight_id.localeCompare(b.insight_id)
+    )
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      sorted = sorted.filter(i =>
+        i.insight_id.toLowerCase().includes(query) ||
+        (i.disease_state || '').toLowerCase().includes(query) ||
+        (i.therapeutic_area || '').toLowerCase().includes(query)
+      )
+    }
+    return sorted
+  }, [insights, searchQuery])
+
+  // Paginate filtered insights
+  const filteredInsights = useMemo(() => {
+    const start = insightPage * insightsPerPage
+    return allFilteredInsights.slice(start, start + insightsPerPage)
+  }, [allFilteredInsights, insightPage])
+
+  const totalInsightPages = Math.ceil(allFilteredInsights.length / insightsPerPage)
+
+  // Reset page when search changes
+  useEffect(() => {
+    setInsightPage(0)
+  }, [searchQuery])
 
   useEffect(() => {
     fetchData()
@@ -198,15 +230,49 @@ function Tagging() {
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Single Insight</h3>
           <p className="text-slate-500 dark:text-slate-400 mb-4">Tag an individual insight</p>
 
+          {/* Search Input */}
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by ID or disease..."
+              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-slate-400">
+              Showing {insightPage * insightsPerPage + 1}-{Math.min((insightPage + 1) * insightsPerPage, allFilteredInsights.length)} of {allFilteredInsights.length} insights
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setInsightPage(p => Math.max(0, p - 1))}
+                disabled={insightPage === 0}
+                className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 hover:bg-slate-300 dark:hover:bg-slate-500"
+              >
+                Prev
+              </button>
+              <span className="text-xs text-slate-500 px-2">{insightPage + 1}/{totalInsightPages || 1}</span>
+              <button
+                onClick={() => setInsightPage(p => Math.min(totalInsightPages - 1, p + 1))}
+                disabled={insightPage >= totalInsightPages - 1}
+                className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 hover:bg-slate-300 dark:hover:bg-slate-500"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
           <select
             value={selectedInsight}
             onChange={(e) => setSelectedInsight(e.target.value)}
             className="w-full mb-4 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all hover:border-primary-300 dark:hover:border-primary-500"
           >
-            {insights.length === 0 ? (
-              <option value="">No insights loaded</option>
+            {filteredInsights.length === 0 ? (
+              <option value="">No insights found</option>
             ) : (
-              insights.map((insight) => (
+              filteredInsights.map((insight) => (
                 <option key={insight.insight_id} value={insight.insight_id}>
                   {insight.insight_id} - {insight.disease_state || insight.therapeutic_area || 'No description'}
                 </option>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { BarChart3, Target, CheckCircle, Edit3, TrendingUp, Download, Upload, FileText, AlertCircle } from 'lucide-react'
 import { Card, MetricCard, Badge, Button } from '../components/Card'
 import { getMetrics, exportGroundTruthTemplate, compareGroundTruth } from '../api'
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts'
 
 function Metrics() {
   const [metrics, setMetrics] = useState(null)
@@ -80,18 +80,21 @@ function Metrics() {
     return 'text-red-500'
   }
 
-  const getBarColor = (accuracy) => {
-    if (accuracy >= 80) return '#10b981'
-    if (accuracy >= 60) return '#f59e0b'
-    return '#ef4444'
+  // Capitalize label names properly
+  const formatLabel = (label) => {
+    return label
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
   }
 
   // Prepare chart data for comparison
   const comparisonChartData = comparisonResult?.label_accuracy
     ? Object.entries(comparisonResult.label_accuracy).map(([label, data]) => ({
-        name: label.replace('_', ' '),
-        accuracy: data.accuracy,
-        fill: getBarColor(data.accuracy)
+        name: formatLabel(label),
+        Accuracy: data.accuracy,
+        correct: data.correct,
+        total: data.total
       }))
     : []
 
@@ -219,24 +222,45 @@ function Metrics() {
               {/* Accuracy per Label */}
               <div>
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3">Accuracy per Label</p>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={comparisonChartData} layout="vertical">
-                    <XAxis type="number" domain={[0, 100]} tick={{ fill: '#64748b' }} />
-                    <YAxis dataKey="name" type="category" tick={{ fill: '#64748b' }} width={100} />
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={comparisonChartData}>
+                    <defs>
+                      <linearGradient id="accuracyGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" />
+                        <stop offset="100%" stopColor="#8b5cf6" />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      tick={{ fill: '#64748b' }}
+                      label={{ value: 'Accuracy %', angle: -90, position: 'insideLeft', fill: '#64748b' }}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'rgba(15, 23, 42, 0.9)',
                         border: 'none',
-                        borderRadius: '8px',
+                        borderRadius: '12px',
                         color: 'white'
                       }}
-                      formatter={(value) => [`${value}%`, 'Accuracy']}
+                      formatter={(value, name, props) => [
+                        `${value}% (${props.payload.correct}/${props.payload.total})`,
+                        'Accuracy'
+                      ]}
                     />
-                    <Bar dataKey="accuracy" radius={[0, 4, 4, 0]}>
-                      {comparisonChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
+                    <Legend />
+                    <Bar
+                      dataKey="Accuracy"
+                      fill="url(#accuracyGradient)"
+                      radius={[8, 8, 0, 0]}
+                      name="Accuracy %"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -244,11 +268,11 @@ function Metrics() {
               {/* Label Details */}
               <div>
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3">Label Details</p>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                <div className="space-y-2 max-h-[350px] overflow-y-auto">
                   {Object.entries(comparisonResult.label_accuracy).map(([label, data]) => (
                     <div key={label} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-slate-700">
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">
-                        {label.replace('_', ' ')}
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {formatLabel(label)}
                       </span>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-slate-500">
@@ -285,7 +309,7 @@ function Metrics() {
                       {comparisonResult.mismatches.slice(0, 10).map((m, i) => (
                         <tr key={i} className="border-b border-slate-100 dark:border-slate-700/50">
                           <td className="py-2 px-3 font-mono text-slate-900 dark:text-white">{m.insight_id}</td>
-                          <td className="py-2 px-3 text-slate-600 dark:text-slate-300 capitalize">{m.label.replace('_', ' ')}</td>
+                          <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{formatLabel(m.label)}</td>
                           <td className="py-2 px-3"><Badge variant="success">{m.ground_truth || '-'}</Badge></td>
                           <td className="py-2 px-3"><Badge variant="error">{m.ai_prediction || '-'}</Badge></td>
                         </tr>

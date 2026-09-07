@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { CheckCircle, Edit3, User, Package, MessageSquare, Lightbulb, Target, Users, Radio, FileSearch, AlertCircle, Brain, RefreshCw } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { CheckCircle, Edit3, User, Package, MessageSquare, Lightbulb, Target, Users, Radio, FileSearch, AlertCircle, Brain, RefreshCw, ChevronLeft, ChevronRight, Lock } from 'lucide-react'
 import { Card, Badge, Button } from '../components/Card'
 import { getTags, getInsights, getLabelOptions, getTaxonomySI, getTaxonomyCSF, verifyTag, correctTag } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 const LABEL_CONFIG = [
   { key: 'asset', label: 'Asset', icon: Package },
@@ -17,19 +18,23 @@ const LABEL_CONFIG = [
 ]
 
 function Review() {
+  const { user, isEvaluator } = useAuth()
+
   const [allTags, setAllTags] = useState([])
   const [tags, setTags] = useState([])
   const [insights, setInsights] = useState({})
   const [labelOptions, setLabelOptions] = useState({})
   const [taxonomySI, setTaxonomySI] = useState([])
   const [taxonomyCSF, setTaxonomyCSF] = useState([])
-  const [reviewer, setReviewer] = useState('')
+  const [reviewer, setReviewer] = useState(isEvaluator ? user?.name || '' : '')
   const [editingId, setEditingId] = useState(null)
   const [corrections, setCorrections] = useState({})
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [showAll, setShowAll] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10
 
   useEffect(() => {
     fetchData()
@@ -41,7 +46,15 @@ function Review() {
     } else {
       setTags(allTags.filter(t => !t.is_verified))
     }
+    setCurrentPage(1) // Reset to page 1 when filter changes
   }, [showAll, allTags])
+
+  // Pagination
+  const totalPages = Math.ceil(tags.length / pageSize)
+  const paginatedTags = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return tags.slice(start, start + pageSize)
+  }, [tags, currentPage, pageSize])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -176,21 +189,38 @@ function Review() {
       {/* Reviewer Input */}
       <Card className="mb-6">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isEvaluator ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-primary-500 to-purple-600'}`}>
             <User className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">Reviewer Name</label>
-            <input
-              type="text"
-              value={reviewer}
-              onChange={(e) => setReviewer(e.target.value)}
-              placeholder="Enter your name"
-              className="w-full max-w-sm px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-            />
+            {isEvaluator ? (
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Evaluator Mode</p>
+                <p className="text-lg font-semibold text-slate-900 dark:text-white">{user?.name}</p>
+              </div>
+            ) : (
+              <>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">Reviewer Name</label>
+                <input
+                  type="text"
+                  value={reviewer}
+                  onChange={(e) => setReviewer(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full max-w-sm px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                />
+              </>
+            )}
           </div>
-          {reviewer && (
-            <Badge variant="success">Logged in as {reviewer}</Badge>
+          {isEvaluator ? (
+            <Badge variant="success">
+              <CheckCircle className="w-3 h-3 mr-1" /> Evaluator Access
+            </Badge>
+          ) : reviewer ? (
+            <Badge variant="primary">Reviewing as {reviewer}</Badge>
+          ) : (
+            <Badge variant="warning">
+              <Lock className="w-3 h-3 mr-1" /> Enter name to review
+            </Badge>
           )}
         </div>
       </Card>
@@ -206,7 +236,7 @@ function Review() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {tags.map((tag) => {
+          {paginatedTags.map((tag) => {
             const insight = insights[tag.insight_id] || {}
             const isEditing = editingId === tag.insight_id
 
@@ -333,6 +363,33 @@ function Review() {
               </Card>
             )
           })}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </Button>
+              <span className="text-sm text-slate-600 dark:text-slate-400">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

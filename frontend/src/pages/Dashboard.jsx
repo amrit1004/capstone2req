@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { LayoutDashboard, FileText, Tags, CheckCircle, Clock } from 'lucide-react'
 import { Card, MetricCard, Badge } from '../components/Card'
 import { getSummary, getInsights } from '../api'
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899']
 
@@ -85,12 +85,12 @@ function Dashboard() {
             Distribution by Strategic Imperative
           </h3>
           {pieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={320}>
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
-                  cy="50%"
+                  cy="45%"
                   innerRadius={60}
                   outerRadius={100}
                   paddingAngle={5}
@@ -108,6 +108,12 @@ function Dashboard() {
                     color: 'white'
                   }}
                 />
+                <Legend
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  align="center"
+                  wrapperStyle={{ paddingTop: '20px' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -122,8 +128,14 @@ function Dashboard() {
             Insights by Therapeutic Area
           </h3>
           {barData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={320}>
               <BarChart data={barData}>
+                <defs>
+                  <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
                 <XAxis dataKey="name" tick={{ fill: '#64748b' }} />
                 <YAxis tick={{ fill: '#64748b' }} />
                 <Tooltip
@@ -134,13 +146,8 @@ function Dashboard() {
                     color: 'white'
                   }}
                 />
-                <Bar dataKey="count" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} />
-                <defs>
-                  <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" />
-                    <stop offset="100%" stopColor="#8b5cf6" />
-                  </linearGradient>
-                </defs>
+                <Legend />
+                <Bar dataKey="count" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} name="Insights Count" />
               </BarChart>
             </ResponsiveContainer>
           ) : (

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { Users, Stethoscope, FlaskConical, Briefcase, Sparkles } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Users, Stethoscope, FlaskConical, Briefcase, Sparkles, Search, Shield } from 'lucide-react'
 import { Card, Badge, Button } from '../components/Card'
 import { getInsights, getPersonaSummaries, generatePersonaSummaries, generateAllPersonas } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 const personaConfig = {
   clinician: { icon: Stethoscope, color: 'from-emerald-500 to-teal-600', label: 'Clinician' },
@@ -10,6 +11,19 @@ const personaConfig = {
 }
 
 function Personas() {
+  const { user, role } = useAuth()
+
+  // Filter personas based on user role (admin sees all)
+  const visiblePersonas = useMemo(() => {
+    if (role === 'admin') {
+      return Object.entries(personaConfig)
+    }
+    // Show only user's role persona
+    if (role && personaConfig[role]) {
+      return [[role, personaConfig[role]]]
+    }
+    return Object.entries(personaConfig)
+  }, [role])
   const [insights, setInsights] = useState([])
   const [selectedInsight, setSelectedInsight] = useState('')
   const [summaries, setSummaries] = useState(null)
@@ -19,6 +33,38 @@ function Personas() {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [batchLimit, setBatchLimit] = useState('')
   const [skipGenerated, setSkipGenerated] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [insightPage, setInsightPage] = useState(0)
+  const insightsPerPage = 20
+
+  // Sort insights by ID and filter by search query
+  const allFilteredInsights = useMemo(() => {
+    let sorted = [...insights].sort((a, b) =>
+      a.insight_id.localeCompare(b.insight_id)
+    )
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      sorted = sorted.filter(i =>
+        i.insight_id.toLowerCase().includes(query) ||
+        (i.disease_state || '').toLowerCase().includes(query) ||
+        (i.therapeutic_area || '').toLowerCase().includes(query)
+      )
+    }
+    return sorted
+  }, [insights, searchQuery])
+
+  // Paginate filtered insights
+  const filteredInsights = useMemo(() => {
+    const start = insightPage * insightsPerPage
+    return allFilteredInsights.slice(start, start + insightsPerPage)
+  }, [allFilteredInsights, insightPage])
+
+  const totalInsightPages = Math.ceil(allFilteredInsights.length / insightsPerPage)
+
+  // Reset page when search changes
+  useEffect(() => {
+    setInsightPage(0)
+  }, [searchQuery])
 
   useEffect(() => {
     fetchInsights()
@@ -81,9 +127,22 @@ function Personas() {
         <p className="text-slate-500 dark:text-slate-400">View insights tailored for different audiences</p>
       </div>
 
+      {/* Role Info Banner */}
+      {role !== 'admin' && (
+        <Card className="mb-6 bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 border-primary-200 dark:border-primary-800">
+          <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-primary-500" />
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              You are viewing as <span className="font-semibold">{personaConfig[role]?.label || role}</span>.
+              Only your role's persona summary is shown.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* Persona Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {Object.entries(personaConfig).map(([key, config]) => {
+      <div className={`grid grid-cols-1 ${visiblePersonas.length > 1 ? 'md:grid-cols-3' : 'md:grid-cols-1 max-w-md'} gap-6 mb-8`}>
+        {visiblePersonas.map(([key, config]) => {
           const Icon = config.icon
           return (
             <Card key={key} hover>
@@ -142,15 +201,50 @@ function Personas() {
       {/* View Summaries */}
       <Card className="mb-6">
         <h3 className="font-semibold text-slate-900 dark:text-white mb-4">View Persona Summaries</h3>
-        <div className="flex flex-col md:flex-row gap-4">
+
+        {/* Search Input */}
+        <div className="relative mb-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by ID or disease..."
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+          />
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-slate-400">
+            Showing {insightPage * insightsPerPage + 1}-{Math.min((insightPage + 1) * insightsPerPage, allFilteredInsights.length)} of {allFilteredInsights.length} insights
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setInsightPage(p => Math.max(0, p - 1))}
+              disabled={insightPage === 0}
+              className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 hover:bg-slate-300 dark:hover:bg-slate-500"
+            >
+              Prev
+            </button>
+            <span className="text-xs text-slate-500 px-2">{insightPage + 1}/{totalInsightPages || 1}</span>
+            <button
+              onClick={() => setInsightPage(p => Math.min(totalInsightPages - 1, p + 1))}
+              disabled={insightPage >= totalInsightPages - 1}
+              className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 disabled:opacity-50 hover:bg-slate-300 dark:hover:bg-slate-500"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4 items-start">
           <select
             value={selectedInsight}
             onChange={(e) => setSelectedInsight(e.target.value)}
             className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none"
           >
-            {insights.map((insight) => (
+            {filteredInsights.map((insight) => (
               <option key={insight.insight_id} value={insight.insight_id}>
-                {insight.insight_id} - {insight.disease_state}
+                {insight.insight_id} - {insight.disease_state || insight.therapeutic_area}
               </option>
             ))}
           </select>
@@ -173,8 +267,8 @@ function Personas() {
           </Card>
 
           {/* Persona Summaries */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {Object.entries(personaConfig).map(([key, config]) => {
+          <div className={`grid grid-cols-1 ${visiblePersonas.length > 1 ? 'lg:grid-cols-3' : 'lg:grid-cols-1 max-w-2xl'} gap-6`}>
+            {visiblePersonas.map(([key, config]) => {
               const Icon = config.icon
               const summary = summaries[key]
               return (
