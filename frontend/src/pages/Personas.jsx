@@ -1,43 +1,44 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Users, Stethoscope, FlaskConical, Briefcase, Sparkles, Search, Shield } from 'lucide-react'
-import { Card, Badge, Button } from '../components/Card'
-import { getInsights, getPersonaSummaries, generatePersonaSummaries, generateAllPersonas } from '../api'
+import { Users, Stethoscope, FlaskConical, Briefcase, Sparkles, Search, Shield, Copy, Check, RefreshCw, Clock, FileText } from 'lucide-react'
+import { Card, Badge, Button, MetricCard } from '../components/Card'
+import { getInsights, getPersonaSummaries, generatePersonaSummaries, generateAllPersonas, getSummary } from '../api'
 import { useAuth } from '../context/AuthContext'
 
 const personaConfig = {
-  clinician: { icon: Stethoscope, color: 'from-emerald-500 to-teal-600', label: 'Clinician' },
-  medical_scientist: { icon: FlaskConical, color: 'from-primary-500 to-purple-600', label: 'Medical Scientist' },
-  commercial: { icon: Briefcase, color: 'from-orange-500 to-amber-600', label: 'Commercial' },
+  clinician: { icon: Stethoscope, color: 'from-emerald-500 to-teal-600', label: 'Clinician', bgColor: 'bg-emerald-500' },
+  medical_scientist: { icon: FlaskConical, color: 'from-primary-500 to-purple-600', label: 'Medical Scientist', bgColor: 'bg-primary-500' },
+  commercial: { icon: Briefcase, color: 'from-orange-500 to-amber-600', label: 'Commercial', bgColor: 'bg-orange-500' },
 }
 
 function Personas() {
   const { user, role } = useAuth()
 
-  // Filter personas based on user role (admin sees all)
   const visiblePersonas = useMemo(() => {
     if (role === 'admin') {
       return Object.entries(personaConfig)
     }
-    // Show only user's role persona
     if (role && personaConfig[role]) {
       return [[role, personaConfig[role]]]
     }
     return Object.entries(personaConfig)
   }, [role])
+
   const [insights, setInsights] = useState([])
   const [selectedInsight, setSelectedInsight] = useState('')
   const [summaries, setSummaries] = useState(null)
   const [originalText, setOriginalText] = useState('')
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
   const [generatingAll, setGeneratingAll] = useState(false)
   const [batchLimit, setBatchLimit] = useState('')
   const [skipGenerated, setSkipGenerated] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [insightPage, setInsightPage] = useState(0)
+  const [copiedKey, setCopiedKey] = useState(null)
+  const [stats, setStats] = useState({ total: 0, generated: 0 })
   const insightsPerPage = 20
 
-  // Sort insights by ID and filter by search query
   const allFilteredInsights = useMemo(() => {
     let sorted = [...insights].sort((a, b) =>
       a.insight_id.localeCompare(b.insight_id)
@@ -53,7 +54,6 @@ function Personas() {
     return sorted
   }, [insights, searchQuery])
 
-  // Paginate filtered insights
   const filteredInsights = useMemo(() => {
     const start = insightPage * insightsPerPage
     return allFilteredInsights.slice(start, start + insightsPerPage)
@@ -61,22 +61,29 @@ function Personas() {
 
   const totalInsightPages = Math.ceil(allFilteredInsights.length / insightsPerPage)
 
-  // Reset page when search changes
   useEffect(() => {
     setInsightPage(0)
   }, [searchQuery])
 
   useEffect(() => {
-    fetchInsights()
+    fetchData()
   }, [])
 
-  const fetchInsights = async () => {
+  const fetchData = async () => {
     try {
-      const res = await getInsights()
-      setInsights(res.data.insights || [])
-      if (res.data.insights?.length > 0) {
-        setSelectedInsight(res.data.insights[0].insight_id)
+      const [insightsRes, summaryRes] = await Promise.all([
+        getInsights(),
+        getSummary()
+      ])
+      const insightsList = insightsRes.data.insights || []
+      setInsights(insightsList)
+      if (insightsList.length > 0) {
+        setSelectedInsight(insightsList[0].insight_id)
       }
+      setStats({
+        total: summaryRes.data?.total_insights || insightsList.length,
+        generated: summaryRes.data?.tagged_insights || 0
+      })
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -93,7 +100,6 @@ function Personas() {
       setOriginalText(res.data.original_text || '')
     } catch (error) {
       console.error('Error:', error)
-      // Try generating if not found
       try {
         const genRes = await generatePersonaSummaries(selectedInsight)
         setSummaries(genRes.data.summaries || {})
@@ -107,12 +113,27 @@ function Personas() {
     }
   }
 
+  const handleRegenerate = async () => {
+    setRegenerating(true)
+    try {
+      const genRes = await generatePersonaSummaries(selectedInsight)
+      setSummaries(genRes.data.summaries || {})
+      const insight = insights.find(i => i.insight_id === selectedInsight)
+      setOriginalText(insight?.description || '')
+    } catch (error) {
+      console.error('Error regenerating:', error)
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   const handleGenerateAll = async () => {
     setGeneratingAll(true)
     try {
       const limit = batchLimit ? parseInt(batchLimit) : null
       const res = await generateAllPersonas(limit, skipGenerated)
       alert(`Generated summaries for ${res.data.results.success} insights`)
+      fetchData()
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -120,11 +141,49 @@ function Personas() {
     }
   }
 
+  const handleCopy = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey(null), 2000)
+    } catch (err) {
+      console.error('Copy failed:', err)
+    }
+  }
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return null
+    const date = new Date(timestamp)
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Persona Summaries</h1>
         <p className="text-slate-500 dark:text-slate-400">View insights tailored for different audiences</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <MetricCard
+          label="Total Insights"
+          value={stats.total}
+          icon={FileText}
+          color="primary"
+        />
+        <MetricCard
+          label="Summaries Generated"
+          value={stats.generated}
+          icon={Users}
+          color="green"
+        />
+        <MetricCard
+          label="Pending"
+          value={Math.max(0, stats.total - stats.generated)}
+          icon={Clock}
+          color="orange"
+        />
       </div>
 
       {/* Role Info Banner */}
@@ -169,7 +228,7 @@ function Personas() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h3 className="font-semibold text-slate-900 dark:text-white">Batch Generation</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Generate persona summaries</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Generate persona summaries for multiple insights</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <label className="text-sm text-slate-600 dark:text-slate-400">Limit:</label>
@@ -192,7 +251,7 @@ function Personas() {
             </label>
             <Button onClick={handleGenerateAll} loading={generatingAll}>
               <Sparkles className="w-4 h-4" />
-              Generate
+              Generate All
             </Button>
           </div>
         </div>
@@ -215,7 +274,7 @@ function Personas() {
         </div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs text-slate-400">
-            Showing {insightPage * insightsPerPage + 1}-{Math.min((insightPage + 1) * insightsPerPage, allFilteredInsights.length)} of {allFilteredInsights.length} insights
+            Showing {allFilteredInsights.length > 0 ? insightPage * insightsPerPage + 1 : 0}-{Math.min((insightPage + 1) * insightsPerPage, allFilteredInsights.length)} of {allFilteredInsights.length}
           </p>
           <div className="flex items-center gap-1">
             <button
@@ -260,7 +319,13 @@ function Personas() {
         <div className="space-y-6">
           {/* Original Text */}
           <Card>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Original Insight</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-slate-900 dark:text-white">Original Insight</h3>
+              <Button variant="outline" size="sm" onClick={handleRegenerate} loading={regenerating}>
+                <RefreshCw className="w-4 h-4" />
+                Regenerate
+              </Button>
+            </div>
             <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl">
               {originalText}
             </p>
@@ -271,17 +336,41 @@ function Personas() {
             {visiblePersonas.map(([key, config]) => {
               const Icon = config.icon
               const summary = summaries[key]
+              const isCopied = copiedKey === key
               return (
-                <Card key={key} className={`border-t-4 border-gradient`} style={{ borderTopColor: key === 'clinician' ? '#10b981' : key === 'medical_scientist' ? '#6366f1' : '#f59e0b' }}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${config.color} flex items-center justify-center`}>
-                      <Icon className="w-5 h-5 text-white" />
+                <Card key={key} className="relative group" style={{ borderTop: `4px solid ${key === 'clinician' ? '#10b981' : key === 'medical_scientist' ? '#6366f1' : '#f59e0b'}` }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${config.color} flex items-center justify-center`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <h4 className="font-semibold text-slate-900 dark:text-white">{config.label}</h4>
                     </div>
-                    <h4 className="font-semibold text-slate-900 dark:text-white">{config.label}</h4>
+                    {summary?.summary && (
+                      <button
+                        onClick={() => handleCopy(key, summary.summary)}
+                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        {isCopied ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
+                        )}
+                      </button>
+                    )}
                   </div>
                   <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
                     {summary?.summary || 'No summary generated yet'}
                   </p>
+                  {summary?.generated_at && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                      <p className="text-xs text-slate-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatTimestamp(summary.generated_at)}
+                      </p>
+                    </div>
+                  )}
                 </Card>
               )
             })}
