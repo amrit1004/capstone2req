@@ -62,3 +62,11 @@ class VectorStoreException(AppException):
 
     def __init__(self, message: str):
         super().__init__(message, "VECTOR_ERROR")
+
+
+class RateLimitException(AppException):
+    """API rate limit errors."""
+
+    def __init__(self, message: str = "Rate limit exceeded", retry_after: int = None):
+        super().__init__(message, "RATE_LIMIT")
+        self.retry_after = retry_after
