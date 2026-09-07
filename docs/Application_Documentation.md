@@ -1034,6 +1034,156 @@ capstone2req/
 
 ---
 
+## Taxonomy Mapping (SI & CSF)
+
+### How SI and CSF are Mapped to Insights
+
+The mapping is done by **LLM classification**, not direct database relationships.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SI/CSF MAPPING FLOW                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. TAXONOMY TABLES (predefined)                                │
+│  ════════════════════════════════                               │
+│                                                                  │
+│  taxonomy_si:                    taxonomy_csf:                  │
+│  ┌──────┬─────────────────┐     ┌─────────┬──────────┬────────┐│
+│  │si_id │ si_name         │     │csf_id   │parent_si │TA      ││
+│  ├──────┼─────────────────┤     ├─────────┼──────────┼────────┤│
+│  │SI-01 │ Drive Adoption  │     │ONC-CSF-1│SI-01     │Oncology││
+│  │SI-02 │ Evidence Gen    │     │ONC-CSF-2│SI-02     │Oncology││
+│  │SI-03 │ Market Access   │     │IMM-CSF-1│SI-01     │Immunol ││
+│  └──────┴─────────────────┘     └─────────┴──────────┴────────┘│
+│                                                                  │
+│  2. INSIGHT COMES IN                                            │
+│  ═══════════════════                                            │
+│                                                                  │
+│  "KOL expressed concerns about dosing frequency for oncology    │
+│   patients in the Phase 3 trial"                                │
+│                                                                  │
+│  therapeutic_area = "Oncology"                                  │
+│                                                                  │
+│  3. GET TAXONOMY FOR THIS AREA                                  │
+│  ═════════════════════════════                                  │
+│  File: taxonomy_tagger.py → get_taxonomy_for_area()             │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  def get_taxonomy_for_area(therapeutic_area):              │ │
+│  │      si_df = database.get_taxonomy_si()  # All SIs         │ │
+│  │      csf_df = database.get_taxonomy_csf(therapeutic_area)  │ │
+│  │      # Returns only CSFs for "Oncology"                    │ │
+│  │      return si_df, csf_df                                  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  4. SEND TO LLM WITH OPTIONS                                    │
+│  ═══════════════════════════                                    │
+│  File: llm_service.py → classify_insight()                      │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  prompt = """                                              │ │
+│  │  INSIGHT: "KOL expressed concerns about dosing..."         │ │
+│  │                                                             │ │
+│  │  STRATEGIC IMPERATIVES - Choose ONE:                       │ │
+│  │  - SI-01: Drive Adoption                                   │ │
+│  │  - SI-02: Evidence Generation                              │ │
+│  │  - SI-03: Market Access                                    │ │
+│  │                                                             │ │
+│  │  CRITICAL SUCCESS FACTORS (Oncology) - Choose ONE:         │ │
+│  │  - ONC-CSF-01: Demonstrate efficacy (under SI-01)          │ │
+│  │  - ONC-CSF-02: Generate RWE data (under SI-02)             │ │
+│  │                                                             │ │
+│  │  Return JSON with si_id and csf_id                         │ │
+│  │  """                                                       │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  5. LLM RETURNS MAPPING                                         │
+│  ══════════════════════                                         │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  {                                                         │ │
+│  │    "si_id": "SI-01",        ← LLM chose this              │ │
+│  │    "csf_id": "ONC-CSF-01",  ← LLM chose this              │ │
+│  │    "sentiment": "Negative",                                │ │
+│  │    "topic": "Dosing",                                      │ │
+│  │    ...                                                     │ │
+│  │  }                                                         │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  6. SAVED TO insight_tags TABLE                                 │
+│  ══════════════════════════════                                 │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  insight_tags:                                             │ │
+│  │  ┌───────────┬────────┬───────────┬─────────┬────────────┐│ │
+│  │  │insight_id │ si_id  │ csf_id    │sentiment│ topic      ││ │
+│  │  ├───────────┼────────┼───────────┼─────────┼────────────┤│ │
+│  │  │ INS-042   │ SI-01  │ONC-CSF-01 │Negative │ Dosing     ││ │
+│  │  └───────────┴────────┴───────────┴─────────┴────────────┘│ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Point
+
+**There is NO direct foreign key** between `insights` and `taxonomy_si/csf`. 
+
+The mapping happens via:
+1. **LLM Classification** - AI reads insight text and chooses best SI/CSF
+2. **Stored as text** - `si_id` and `csf_id` stored as TEXT in `insight_tags`
+
+### Code Reference
+
+```python
+# taxonomy_tagger.py - get_taxonomy_for_area()
+def get_taxonomy_for_area(therapeutic_area: str) -> tuple:
+    # Get ALL Strategic Imperatives
+    si_df = database.get_taxonomy_si()
+    
+    # Get CSFs FILTERED by therapeutic area
+    csf_df = database.get_taxonomy_csf(therapeutic_area)
+    if csf_df.empty:
+        csf_df = database.get_taxonomy_csf()  # Fallback to all
+    
+    return si_df.to_dict('records'), csf_df.to_dict('records')
+
+
+# llm_service.py - classify_insight()
+def classify_insight(insight_text, therapeutic_area, taxonomy_si, taxonomy_csf):
+    # Format options for prompt
+    si_list = "\n".join([f"- {t['si_id']}: {t['si_name']}" for t in taxonomy_si])
+    csf_list = "\n".join([f"- {t['csf_id']}: {t['csf_name']}" for t in taxonomy_csf])
+    
+    prompt = f"""
+    INSIGHT: "{insight_text}"
+    
+    STRATEGIC IMPERATIVES - Choose ONE:
+    {si_list}
+    
+    CRITICAL SUCCESS FACTORS - Choose ONE:
+    {csf_list}
+    
+    Return: {{"si_id": "...", "csf_id": "...", ...}}
+    """
+    
+    response = llm.complete(prompt)
+    return json.loads(response)  # Contains si_id, csf_id
+```
+
+### Mapping Summary
+
+| Step | What Happens | File |
+|------|--------------|------|
+| 1 | Insight has `therapeutic_area` (e.g., "Oncology") | `insights` table |
+| 2 | Fetch all SIs + CSFs for that area | `taxonomy_tagger.py` |
+| 3 | Send to LLM as options in prompt | `llm_service.py` |
+| 4 | LLM analyzes text and picks best SI/CSF | Azure OpenAI |
+| 5 | Save `si_id` and `csf_id` as TEXT | `insight_tags` table |
+
+---
+
 ## Database Schema
 
 ```sql
